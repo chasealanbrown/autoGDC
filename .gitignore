@@ -1,5 +1,6 @@
 *.pkl
 *.egg-info
+.ipynb-checkpoints/*
 .ipynb-checkpoints
 *__pycache__/*
 autoGDC/data/*
