@@ -1,9 +1,10 @@
-library(IRdisplay)
-library(DESeq2)
-library(GO.db)
-library(Homo.sapiens)
+list.of.packages <- c("ggplot2", "DESeq2")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
 
-DE_Genes <- function(counts_df, design_matrix, design_formula) {
+library(DESeq2)
+
+deseq2_r <- function(counts_df, design_matrix, design_formula) {
     rownames(design_matrix) <- NULL
 
     # Remove small reads

@@ -15,8 +15,26 @@ def init_cache():
     os.makedirs(CACHE_DIRECTORY, exist_ok=True)
     memory = Memory(cachedir = CACHE_DIRECTORY, compress = True)
     return memory
-    
+
 memoize = init_cache().cache
+
+
+def quantile_normalize(df):
+    """
+	source:
+    https://cmdlinetips.com/2020/06/computing-quantile-normalization-in-python/
+    input: dataframe (features x samples as rows x columns)
+    output: dataframe with quantile normalized values
+    """
+    df_sorted = pd.DataFrame(np.sort(df.values,
+                                     axis=0),
+                             index=df.index,
+                             columns=df.columns)
+    df_mean = df_sorted.mean(axis=1)
+    df_mean.index = np.arange(1, len(df_mean) + 1)
+    df_qn = df.rank(method="min").stack().astype(int).map(df_mean).unstack()
+    return(df_qn)
+
 
 @memoize
 def combined_region_collapsed_frame(dfs_dict,
@@ -43,7 +61,7 @@ def combined_region_collapsed_frame(dfs_dict,
                                         value_name = "data_value")
 
     """
-    
+
     all_region_df = combine_different_measures(dfs_dict)
 
     seq_region_collapsed = seq_collapsing(main_seq_data = main_seq_data,
@@ -79,7 +97,7 @@ def combine_different_measures(df_dict):
         stack and order the dataframe by sample,
         then combine several measurements from different dataframes
 
-    Examples: 
+    Examples:
         1) Multiple expression measurements (counts, FKPM, FKPM-UQ, user_normalized)
                in several different dataframes for many samples,
                combined to one dataframe.
@@ -87,7 +105,7 @@ def combine_different_measures(df_dict):
                  and "word_count" could be rna-counts or FKPM
 
 
-        2) Multiple dataframes describing the word cound and sentiment score 
+        2) Multiple dataframes describing the word cound and sentiment score
                for multiple documents, within various regions of the text.
 
 
@@ -98,7 +116,7 @@ def combine_different_measures(df_dict):
 
          word_count:                                               sentiment_score:
                               document_0  document_1                                   document_0  document_1
-             region                                                   region                               
+             region                                                   region
              mid                       8          73                  mid                      61          60
              end                      73          89       +          end                      72           7
              start                    60          22                  start                    74          74
@@ -109,7 +127,7 @@ def combine_different_measures(df_dict):
      output:
          out_df:
                                      word_count  sentiment_score
-                        region                              
+                        region
              document_0 end                  73               72
                         intro                60               22
                         mid                   8               61
@@ -157,7 +175,7 @@ def combine_different_measures(df_dict):
         original_col_name = "document"
 
     output.index.set_names([original_col_name, original_ix_name], inplace = True)
-    
+
     duration = round(time.time() - t0, 1)
     LOG.info(f"Took {duration} seconds to combine the measures")
     return output
@@ -178,7 +196,7 @@ def seq_collapsing(main_seq_data,
         stack and order the dataframe by sample,
         then combine several measurements from different dataframes
 
-    Examples: 
+    Examples:
         1) Multiple expression measurements (counts, FKPM, FKPM-UQ, user_normalized)
                in several different dataframes for many samples,
                combined to one dataframe.
@@ -186,7 +204,7 @@ def seq_collapsing(main_seq_data,
                  and "word_count" could be rna-counts or FKPM
 
 
-        2) Multiple dataframes describing the word cound and sentiment score 
+        2) Multiple dataframes describing the word cound and sentiment score
                for multiple documents, within various regions of the text.
 
 
@@ -197,13 +215,13 @@ def seq_collapsing(main_seq_data,
 
          seq_feature_metadata: pd.DataFrame
              A (feature_row x feature_metadata) dataframe.
-             For example, this could be a (Illumina 450k array chip loci x metadata) dataframe, 
+             For example, this could be a (Illumina 450k array chip loci x metadata) dataframe,
                  wherein metadata is "Gene_Symbol" or "Position_to_TSS", describing the assoicated values for that locus
 
 
         main_seq_data:                                    seq_feature_metadata:
             main_seq_data  document_0  document_1             seq_feature_metadata region  position_in_region  other_uninteresting_info
-            feat_index                                        feat_index                                                               
+            feat_index                                        feat_index
             0                    0.00        0.11             0                       end                5930                      3797
             1                    0.77        0.23             1                     title                6851                      2635
             2                    0.85        0.05     +       2                     intro                8660                      4577
@@ -217,7 +235,7 @@ def seq_collapsing(main_seq_data,
 
 
         region:
-            This is the column in the metadata to collapse on. 
+            This is the column in the metadata to collapse on.
             i.e. "Gene_symbol"
 
         other_features:
@@ -226,9 +244,9 @@ def seq_collapsing(main_seq_data,
 
      output:
          out_df:
-            full_region_sub_ix           0                                         1 ...                                         3                              
+            full_region_sub_ix           0                                         1 ...                                         3
                                data_values feat_index position_in_region data_values ... feat_index position_in_region data_values
-            document   region                                                                                                                                                                            
+            document   region
             document_0 end            0.63        2.0             5091.0        0.66 ...        1.0             9699.0         NaN
                        mid            0.95        4.0              423.0        0.20 ...        NaN                NaN         NaN
                        start          0.83        0.0             2891.0         NaN ...        NaN                NaN         NaN
@@ -255,7 +273,7 @@ def seq_collapsing(main_seq_data,
     #
     # This returns a series with this format:
     #
-    #     region  feat_index  position_in_region            
+    #     region  feat_index  position_in_region
     #     start   0           2891                document_0    0.83
     #                                             document_1    0.95
     #     end     1           9699                document_0    0.94
@@ -321,7 +339,7 @@ def seq_collapsing(main_seq_data,
         # This will be of the following form:
         #
         #                                                             document region  full_region_sub_ix
-        #                     document   region full_region_sub_ix                                       
+        #                     document   region full_region_sub_ix
         #                     document_0 end    0                   document_0    end                   0
         #                                       1                   document_0    end                   1
         #                                       2                   document_0    end                   2
@@ -344,9 +362,9 @@ def seq_collapsing(main_seq_data,
         # i.e. keep document and region within the index (the index which is desired in the output)
         #
         # This will provide the following format of output:
-        # 
+        #
         #                                position_in_region  feat_index  data_values
-        #             document   region                                             
+        #             document   region
         #             document_0 end                   5091           2         0.63
         #                        end                   6018           5         0.66
         #                        end                   9699           1         0.94
@@ -362,11 +380,11 @@ def seq_collapsing(main_seq_data,
         s = s.reset_index(level=[2, 3])
 
         # Append the gene iteration index to the index
-        # 
+        #
         # This will provide the following format:
-        # 
+        #
         #                                  position_in_region  feat_index  data_values
-        #             document   region                                               
+        #             document   region
         #             document_0 end    0                5091           2         0.63
         #                               1                6018           5         0.66
         #                               2                9699           1         0.94

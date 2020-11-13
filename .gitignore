@@ -1,6 +1,7 @@
 *.pkl
 *.egg-info
-.ipynb-checkpoints/*
-.ipynb-checkpoints
-*__pycache__/*
+*.ipynb-checkpoints/
+__pycache__
 autoGDC/data/*
+Enrichr/
+GSEA_Prerank
