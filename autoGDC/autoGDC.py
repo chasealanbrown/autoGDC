@@ -22,62 +22,10 @@ from geode import chdir as characteristic_direction
 from . import df_utils
 from .R.wrapper import pydeseq
 
-# Gene information
-import mygene
-mg = mygene.MyGeneInfo()
-mg.set_caching(cache_db="/data/databases/mygene/")
-
 # Logger for autoGDC
 logging.getLogger().setLevel(logging.INFO)
 LOG = logging.getLogger(__name__)
-
-
-meth_dtypes = {"Composite Element REF": str,
-               "Beta_value": np.float64,
-               "Chromosome":str,
-               "Start":int,
-               "End":int,
-               "Gene_Symbol":str,
-               "Gene_Type":str,
-               "Transcript_ID":str,
-               "Position_to_TSS":str,
-               "CGI_Coordinate":str,
-               "Feature_Type":str}
-
-mirna_dtypes = {"miRNA_ID": str,
-                "isoform_coords": str,
-                "read_count": int,
-                "reads_per_million_miRNA_mapped": np.float64,
-                "cross-mapped": str,
-                "miRNA_region": str}
-
-# Absolute path for this file
-this_path = path.dirname(os.path.realpath(__file__))
-
-# Gene name information
-#gene_info_path = path.join(this_path, "data", "mart_export.txt")
-#gene_info = pd.read_csv(gene_info_path, sep = "\t")
-#gene_id_name = gene_info[["Gene stable ID", "Gene name"]]\
-#                        .drop_duplicates()\
-#                        .set_index("Gene stable ID")\
-#                        .iloc[:,0]
-#gene_ensg_set = set(gene_id_name.index.tolist())
-
-# Binary program released by GDC for downloading files
-gdc_client_path = path.join(this_path, "bin", "gdc-client")
-
-
-def init_cache():
-  """
-    Creates a cache to store files after large computations
-  """
-  usr_dir = path.expanduser("~")
-  CACHE_DIRECTORY = path.join(usr_dir, ".cache", "autoGDC", "cache")
-  os.makedirs(CACHE_DIRECTORY, exist_ok=True)
-  memory = Memory(cachedir = CACHE_DIRECTORY, compress = True)
-  return memory
-
-memoize = init_cache().cache
+gene_ensg_set = set(gene_id_name.index.tolist())
 
 
 def read_and_filter(filepath: str,
@@ -198,7 +146,7 @@ def subset_paired_assay(mdf):
   return mdf
 
 
-class Dataset(object):
+class Dataset:
   """
   Summary:
     Class to automatically download data from GDC
@@ -274,13 +222,6 @@ class Dataset(object):
     differential_methylation = study.ddx()
 
   """
-  # The GDC api url is used to obtain data via the REST API
-  #   Useful urls are:
-  #     {gdc_api_url}/cases
-  #     {gdc_api_url}/data
-  #     {gdc_api_url}/files
-  api_url = "https://api.gdc.cancer.gov"
-
 
   def __init__(self,
                filt: dict = None,
@@ -291,33 +232,17 @@ class Dataset(object):
                data_dir: str = None,
                methyl_loci_subset: list = None):
 
-    self.downloader = collate.Downloader()
-
     self.paired_assay = paired_assay
     self.contrasts = contrasts
 
-    if fields is None:
-      fields = ["file_name",
-           "md5sum",
-           "file_size",
-           "archive.state",
-           "access",
-           "disease_type",
-           "submitter_id",
-           "primary_site",
-           "analysis.workflow_type",
-           "cases.case_id",
-           "cases.diagnoses.tumor_stage",
-           "cases.diagnoses.age_at_diagnosis",
-           "cases.samples.tissue_type",
-           "cases.samples.sample_type",
-           "cases.project.project_id"
-           "cases.disease_type",
-           "diagnoses.vital_status"]
-
     if filt is None:
-      # Default to Glioma RNA and DNA
-      filt = {"op":'and',
+      # Default to value stored in config
+
+      # If the value in config isn't valid, then halt
+      if type(filt) != dict:
+       raise ValueError("""`filt` parameter is wrong -
+                        Please use a dictionary, formatted like this
+            {"op":'and',
               "content":
                 [{"op":"IN",
                   "content":
@@ -328,7 +253,10 @@ class Dataset(object):
                   "content":
                       {"field": 'files.analysis.workflow_type',
                        "value": ["HTSeq - FPKM",
-                                 "Liftover"]}}]}
+                                 "Liftover"]}}]},
+
+                        """)
+
 
     self.params = {"filters" : json.dumps(filt),
              "format" : "tsv",
@@ -383,33 +311,6 @@ class Dataset(object):
     if self._frame is None:
       self._frame = self._get_frame()
     return self._frame
-
-
-  def _create_data_dirs(self, data_dir):
-    # Create / assign download directory
-    #   Structured to have a directory for each assay type
-    data_dirs = {}
-
-    # Main directory
-    if data_dir is None:
-      data_dir = path.join("/", "data", "autoGDC")
-    data_dir = path.join(path.expanduser(data_dir))
-    os.makedirs(data_dir, exist_ok = True)
-    data_dirs["main"] = data_dir
-
-    # Raw data / temporary download storage directory
-    raw_dir = path.join(data_dir, "raw")
-    os.makedirs(raw_dir, exist_ok = True)
-    data_dirs["raw"] = raw_dir
-
-    # Directory for each biological assay
-    for f in self.file_types.keys():
-      f = f.replace(".", "_")
-      filetype_dir = path.join(data_dir, f)
-      os.makedirs(filetype_dir, exist_ok = True)
-      data_dirs[f] = filetype_dir
-
-    return data_dirs
 
 
   def _feature_metadata_check(self):
@@ -614,15 +515,15 @@ class Dataset(object):
 
 
   def _get_data(self):
-    data_dict = {"Transcriptome Profiling": {"miRNA": None,
-                                             "isoforms": None,
-                                             "counts": None,
-                                             "FPKM": None,
-                                             "FPKM-UQ": None},
-                 "DNA Methylation": {"450": None,
-                                     "27": None,
-                                     "meta450": None,
-                                     "meta27": None}}
+    data_dict = {"RNA": {"miRNA": None,
+                         "isoforms": None,
+                         "counts": None,
+                         "FPKM": None,
+                         "FPKM-UQ": None},
+                 "DNAm": {"450": None,
+                          "27": None,
+                          "meta450": None,
+                          "meta27": None}}
 
     # All file ids in dataframe
     study_ids = set(self.metadata.index.tolist())
