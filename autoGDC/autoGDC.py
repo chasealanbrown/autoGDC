@@ -21,77 +21,13 @@ from geode import chdir as characteristic_direction
 # Local module imports
 from . import df_utils
 from .R.wrapper import pydeseq
+from store import Archive
+from config import SETTING
 
 # Logger for autoGDC
 logging.getLogger().setLevel(logging.INFO)
 LOG = logging.getLogger(__name__)
 gene_ensg_set = set(gene_id_name.index.tolist())
-
-
-def read_and_filter(filepath: str,
-                    subset_features: list = None):
-  """
-  Summary:
-    Reads a tsv file, formats any gene names, and renames it to GDC's `file_id`
-
-  Arguments:
-    filepath:
-      Path to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-  # Read the series
-  #   (which was saved and compress during download phase)
-  series = pd.read_csv(filepath,
-                       sep = "\t",
-                       index_col = 0,
-                       header = None,
-                       engine = "c",
-                       squeeze = True)
-
-  # Rename it to be the filename / file_id
-  file_id = path.splitext(path.basename(filepath.rstrip(".gz")))[0]
-  series.name = file_id
-
-  series = series[~series.index.duplicated(keep="first")]
-
-  # Select subset of features
-  if subset_features:
-    series = series.reindex(subset_features)
-  return series
-
-
-@memoize
-def multifile_df(file_paths: list,
-                 subset_features: list = None):
-  """
-  Summary:
-    Reads a list of tsv files, formats any gene names,
-      and renames it to GDC's `file_id`
-
-  Arguments:
-    filepaths:
-      List of paths to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-#  kwargs = {"subset_features": subset_features}
-
-  # IO bound
-  # Parallel imap with progress bar
-  # series_iter = p_imap(partial(read_and_filter, **kwargs), file_paths)
-  series_list = [read_and_filter(fp, subset_features)
-                      for fp in tqdm(file_paths)]
-
-  # Concatenate all series
-  df = pd.DataFrame({s.name:s for s in series_list})
-
-  df.columns.name = "file_id"
-  return df.dropna(how = "all")
 
 
 def contains_all_substrings(main_list, substr_list):
@@ -224,64 +160,28 @@ class Dataset:
   """
 
   def __init__(self,
+               config_key: str = "default",
                filt: dict = None,
                fields: list = None,
                size: int = 10,
                contrasts: list = None,
-               paired_assay: bool = False,
-               data_dir: str = None,
-               methyl_loci_subset: list = None):
+               paired_assay: bool = False):
+
+    self.conf = SETTING[config_key]
+    self.params = {"filters" : json.dumps(filt),
+                   "format" : "tsv",
+                   "fields" : ",".join(fields),
+                   "size" : str(size)}
 
     self.paired_assay = paired_assay
     self.contrasts = contrasts
 
-    if filt is None:
-      # Default to value stored in config
+    self.archive = Archive(config_key = config_key,
+                           params = self.params)
 
-      # If the value in config isn't valid, then halt
-      if type(filt) != dict:
-       raise ValueError("""`filt` parameter is wrong -
-                        Please use a dictionary, formatted like this
-            {"op":'and',
-              "content":
-                [{"op":"IN",
-                  "content":
-                      {"field": 'cases.disease_type',
-                       "value": ['Gliomas',
-                                 'Neuroblastoma']}},
-                 {"op":"IN",
-                  "content":
-                      {"field": 'files.analysis.workflow_type',
-                       "value": ["HTSeq - FPKM",
-                                 "Liftover"]}}]},
-
-                        """)
-
-
-    self.params = {"filters" : json.dumps(filt),
-             "format" : "tsv",
-             "fields" : ",".join(fields),
-             "size" : str(size)}
-
-    self.file_types = {"HumanMethylation450":[],
-               "HumanMethylation27":[],
-               "FPKM.txt":[],
-               "FPKM-UQ":[],
-               "htseq.counts.gz":[],
-               "mirnas.quantification":[],
-               "isoforms.quantification":[]}
-
-    # Location of all downloaded data storage
-    self.data_dirs = self._create_data_dirs(data_dir)
-
-    self.methyl_loci_subset = methyl_loci_subset
-
-    # Calculates data and metadata
-    LOG.debug("Initializing metadata, data, and frame...")
     self._metadata = None
     self._data = None
     self._frame = None
-    LOG.debug("Initialization complete.")
 
 
   @property
@@ -293,16 +193,22 @@ class Dataset:
 
   @metadata.setter
   def metadata(self, value):
+    """
+    Summary:
+      Sample metadata setter is provided in order to allow additional filtering
+      steps to occur outside of this class and set here.
+
+      This can be done prior to gathering the data into the main dataframe,
+      as the first step is to define the sample metadata, then to use
+      this sample metadata to construct the dataframes from the archive
+    """
     self._metadata = value
 
 
   @property
   def data(self):
     if self._data is None:
-      d = self._get_data()
-      self._data = d #self._change_id_columns(data_df = d,
-                     #                        meta_df = self.metadata,
-                     #                        id_type = "case_id")
+      self._data = self._get_data()
     return self._data
 
 
@@ -311,26 +217,6 @@ class Dataset:
     if self._frame is None:
       self._frame = self._get_frame()
     return self._frame
-
-
-  def _feature_metadata_check(self):
-
-    LOG.debug("Checking feature metadata...")
-
-    # Check if feature metadata exists for each assay
-    for assay, assay_dir in self.data_dirs.items():
-      if any(s in assay for s in ["Methylation27", "Methylation450"]):
-        metadata_path = path.join(assay_dir, "feature_metadata.tsv")
-
-        # If it isn't there, put it there
-        #   (using a local git file now - need to use git LFS)
-        if not path.exists(metadata_path):
-          LOG.info("Moving feature metadata to data directories...")
-          std_metadata_fname = f"{assay}_feature_metadata.tsv"
-          std_metadata_path = path.join(this_path, "data", std_metadata_fname)
-          shutil.copy(std_metadata_path, metadata_path)
-
-    return True
 
 
   def _get_metadata(self):

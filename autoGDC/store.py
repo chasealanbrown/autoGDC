@@ -1,4 +1,6 @@
 from os import path, listdir
+from config import SETTING
+from collate import Collator
 
 
 class Archive:
@@ -12,23 +14,12 @@ class Archive:
   """
 
   def __init__(self,
-               data_dir: str = None,
-               keep_raw: bool = False):
-    if data_dir is None:
-      self.data_dir = default_data_dir
-    else:
-      self.data_dir = data_dir
+               config_key: str = "default",
+               params: dict = None):
 
-    self.filetype_regexs = {"DNAm_450":"HumanMethylation450",
-                            "DNAm_27":"HumanMethylation27",
-                            "RNA_FPKM":"FPKM.txt",
-                            "RNA_FPKM-UQ":"FPKM-UQ",
-                            # Files can have either '-' or '.' in name
-                            "RNA_counts":"htseq[\.\-]counts.gz",
-                            "RNA_miRNA":"mirnas.quantification",
-                            "RNA_isoforms":"isoforms.quantification"
-                           }
-
+    self.conf = SETTING[config_key]
+    self.collator = Collator(config_key = config_key,
+                             params = params)
 
   def _read_dataframe(self, assay_filepath):
     data = pd.read_h5(assay_filepath, "data")

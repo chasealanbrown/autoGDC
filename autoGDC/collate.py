@@ -20,7 +20,7 @@ import logging
 ## Local module imports
 from config import SETTING
 #from . import df_utils
-from .store import Archive
+from download import Downloader
 
 # Gene information
 import mygene
@@ -95,22 +95,33 @@ def multifile_df(file_paths: list,
   df.columns.name = "file_id"
   return df.dropna(how = "all")
 
-
-class Downloader:
-  # The GDC api url is used to obtain data via the REST API
-  #   Useful urls are:
-  #     {gdc_api_url}/cases
-  #     {gdc_api_url}/data
-  #     {gdc_api_url}/files
-  api_url = "https://api.gdc.cancer.gov"
-
-  def __init__(self,
-               data_dir: str = None,
-               keep_raw: bool = False):
-    self.archive = Archive(self.data_dir)
-
 class Collator:
-    def __init__(self, config_key: str = "default"):
-      self.config = CONFIG[config_key]
-      self.mg = mygene.MyGeneInfo()
-      self.mg.set_caching(cache_db = self.config["mygene_dir"])
+  def __init__(self,
+               config_key: str = "default",
+               params: dict = None):
+
+    self.conf = SETTING[config_key]
+    self.downloader = Downloader(config_key = config_key,
+                                 params = params)
+    self.mg = mygene.MyGeneInfo()
+    self.mg.set_caching(cache_db = self.conf["mygene_dir"])
+
+
+  def _feature_metadata_check(self):
+    LOG.debug("Checking DNA methylation feature metadata...")
+
+    # Check if feature metadata exists for each assay
+    for assay, assay_dir in self.conf["assay_dirs"].items():
+      if "DNAm" in assay:
+        metadata_path = path.join(assay_dir, "feature_metadata.tsv")
+
+        # If it isn't there, put it there
+        #   (using a local git file now - need to use git LFS or ipfs)
+        if not path.exists(metadata_path):
+          LOG.info("Moving feature metadata to data directories...")
+          std_metadata_fname = f"{assay}_feature_metadata.tsv"
+          std_metadata_path = path.join(this_path, "data", std_metadata_fname)
+          shutil.copy(std_metadata_path, metadata_path)
+
+    return True
+
