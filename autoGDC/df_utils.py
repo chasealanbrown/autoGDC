@@ -3,7 +3,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from autoGDC import LOG
+from .config import LOG
 #from joblib import Memory
 
 #def init_cache():
@@ -16,92 +16,96 @@ from autoGDC import LOG
 
 
 def column_expand(df, col: str):
+  try:
     firstelem = df[col].dropna().tolist()[0]
     if isinstance(firstelem, list):
-        #   *Almost all* of these rows have a list value, with
-        #   one value in the list.
-        # TODO: We make an assumption here that the other values are not
-        #       important.
-        non_singular = df[col].dropna().apply(len) > 1
-        non_singular_ix = non_singular[non_singular].index
-        if non_singular.sum() > 0:
-            print(f"WARNING\nThe following values were not only one element:")
-            print(df.loc[non_singular_ix])
+      #   *Almost all* of these rows have a list value, with
+      #   one value in the list.
+      # TODO: We make an assumption here that the other values are not
+      #       important.
+      non_singular = df[col].dropna().apply(len) > 1
+      non_singular_ix = non_singular[non_singular].index
+      if non_singular.sum() > 0:
+        print(f"WARNING\nThe following values were not only one element:")
+        print(df.loc[non_singular_ix])
 
-        # Assuming only signular elements
-        tmp_df = pd.DataFrame([{} if type(_) is float else _[0] for _ in df[col]])
+      # Assuming only signular elements
+      tmp_df = pd.DataFrame([{} if type(_) is float else _[0] for _ in df[col]])
 
     if isinstance(firstelem, dict):
-        tmp_df = pd.DataFrame([{_:_} if type(_) is float else _ for _ in df[col]])
+      tmp_df = pd.DataFrame([{_:_} if type(_) is float else _ for _ in df[col]])
     df = df.drop(col, axis = 1).join(tmp_df, rsuffix = f"_for_{col}")
-    return df
+  except KeyError as e:
+    LOG.warn(e)
+    LOG.warn(f"DataFrame does not appear to have column: {col}")
 
-def read_and_filter(filepath: str,
-                    subset_features: list = None):
-  """
-  Summary:
-    Reads a tsv file, formats any gene names, and renames it to GDC's `file_id`
+  return df
 
-  Arguments:
-    filepath:
-      Path to tsv downloaded from GDC
 
-    subet_features:
-      Subset of the features as a list
-  """
-
-  # Read the series
-  #   (which was saved and compress during download phase)
-  series = pd.read_csv(filepath,
-                       sep = "\t",
-                       index_col = 0,
-                       header = None,
-                       engine = "c",
-                       squeeze = True)
-
-  # Rename it to be the filename / file_id
-  file_id = path.splitext(path.basename(filepath.rstrip(".gz")))[0]
-  series.name = file_id
-
-  series = series[~series.index.duplicated(keep="first")]
-
-  # Select subset of features
-  if subset_features:
-    series = series.reindex(subset_featuees)
-  return series
+#def read_and_filter(filepath: str,
+#                    subset_features: list = None):
+#  """
+#  Summary:
+#    Reads a tsv file, formats any gene names, and renames it to GDC's `file_id`
+#
+#  Arguments:
+#    filepath:
+#      Path to tsv downloaded from GDC
+#
+#    subet_features:
+#      Subset of the features as a list
+#  """
+#
+#  # Read the series
+#  #   (which was saved and compress during download phase)
+#  series = pd.read_csv(filepath,
+#                       sep = "\t",
+#                       index_col = 0,
+#                       header = None,
+#                       engine = "c",
+#                       squeeze = True)
+#
+#  # Rename it to be the filename / file_id
+#  file_id = path.splitext(path.basename(filepath.rstrip(".gz")))[0]
+#  series.name = file_id
+#
+#  series = series[~series.index.duplicated(keep="first")]
+#
+#  # Select subset of features
+#  if subset_features:
+#    series = series.reindex(subset_featuees)
+#  return series
 
 
 #@memoize
-def multifile_df(file_paths: list,
-                 subset_features: list = None):
-  """
-  Summary:
-    Reads a list of tsv files, formats any gene names,
-      and renames it to GDC's `file_id`
-
-  Arguments:
-    filepaths:
-      List of paths to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-#  kwargs = {"subset_features": subset_features}
-
-  # IO bound
-  # Parallel imap with progress bar
-  # series_iter = p_imap(partial(read_and_filter, **kwargs), file_paths)
-  series_list = [read_and_filter(fp, subset_features)
-                      for fp in tqdm(file_paths)]
-
-  # Concatenate all series
-  df = pd.DataFrame({s.name:s for s in series_list})
-
-  df.columns.name = "file_id"
-  return df.dropna(how = "all")
-
-
+#def multifile_df(file_paths: list,
+#                 subset_features: list = None):
+#  """
+#  Summary:
+#    Reads a list of tsv files, formats any gene names,
+#      and renames it to GDC's `file_id`
+#
+#  Arguments:
+#    filepaths:
+#      List of paths to tsv downloaded from GDC
+#
+#    subet_features:
+#      Subset of the features as a list
+#  """
+#
+##  kwargs = {"subset_features": subset_features}
+#
+#  # IO bound
+#  # Parallel imap with progress bar
+#  # series_iter = p_imap(partial(read_and_filter, **kwargs), file_paths)
+#  series_list = [read_and_filter(fp, subset_features)
+#                      for fp in tqdm(file_paths)]
+#
+#  # Concatenate all series
+#  df = pd.DataFrame({s.name:s for s in series_list})
+#
+#  df.columns.name = "file_id"
+#  return df.dropna(how = "all")
 
 
 def contains_all_substrings(main_list, substr_list):
@@ -156,26 +160,31 @@ def subset_paired_assay(mdf):
   return mdf
 
 
-
-
 def quantile_normalize(df):
     """
-	source:
-    https://cmdlinetips.com/2020/06/computing-quantile-normalization-in-python/
-    input: dataframe (features x samples as rows x columns)
-    output: dataframe with quantile normalized values
+    Summary:
+      Performs quantile normalization on a dataframe of samples x features
+        (rows x columns)
+	Source:
+      https://cmdlinetips.com/2020/06/computing-quantile-normalization-in-python/
     """
+    # Input assumes samples as rows
+    #   We transpose s.t. the implementation below
+    #   (for features as rows) works
+    df = df.T
     df_sorted = pd.DataFrame(np.sort(df.values,
-                                     axis=0),
+                                     axis = 0),
                              index=df.index,
                              columns=df.columns)
-    df_mean = df_sorted.mean(axis=1)
+    df_mean = df_sorted.mean(axis = 1)
     df_mean.index = np.arange(1, len(df_mean) + 1)
     df_qn = df.rank(method="min").stack().astype(int).map(df_mean).unstack()
-    return(df_qn)
+    # Transpose back
+    df_qn = df_qn.T
+    return df_qn
 
 
-@memoize
+#@memoize
 def combined_region_collapsed_frame(dfs_dict,
                                    main_seq_data,
                                    seq_feature_metadata,
@@ -216,7 +225,7 @@ def combined_region_collapsed_frame(dfs_dict,
                                             ((np.nan, col)
                                              for col in all_region_df.columns))
 
-    LOG.info("Combining DNAm and RNA expression into one dataframe...");
+#    LOG.info("Combining DNAm and RNA expression into one dataframe...");
     t0 = time.time()
 
     main_df = pd.concat([all_region_df, seq_region_collapsed],
@@ -226,10 +235,10 @@ def combined_region_collapsed_frame(dfs_dict,
 
     duration = round(t0 - time.time(), 1)
 
-    LOG.info(f"Took {duration} seconds to concatenate the DNAm & RNA frames")
+#    LOG.info(f"Took {duration} seconds to concatenate the DNAm & RNA frames")
     return main_df
 
-@memoize
+#@memoize
 def combine_different_measures(df_dict):
     """
     Assuming a list of dataframes in (feature_rows x sample_cols) format,
@@ -292,7 +301,7 @@ def combine_different_measures(df_dict):
     for name, df in df_dict.items():
         df_dict[name] = df.groupby(df.columns, axis=1).agg(np.mean)
 
-    LOG.info("Combining all RNA documents to one dataframe...")
+#    LOG.info("Combining all RNA documents to one dataframe...")
     t0 = time.time()
 
     # Create combined dataframes by stacking samples
@@ -316,11 +325,11 @@ def combine_different_measures(df_dict):
     output.index.set_names([original_col_name, original_ix_name], inplace = True)
 
     duration = round(time.time() - t0, 1)
-    LOG.info(f"Took {duration} seconds to combine the measures")
+#    LOG.info(f"Took {duration} seconds to combine the measures")
     return output
 
 
-@memoize
+#@memoize
 def seq_collapsing(main_seq_data,
                    seq_feature_metadata,
                    region,

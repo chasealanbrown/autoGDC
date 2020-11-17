@@ -13,7 +13,7 @@ deseq2_r <- function(counts_df, design_matrix, design_formula) {
     counts_df[is.na(counts_df)] <- 0
 
     # Remove genes with small reads
-    counts_df <- counts_df[rowSums(counts_df == 0) =< (length(colnames) * 2), ]
+    counts_df <- counts_df[rowSums(counts_df == 0) <= (length(colnames) * 2), ]
     
     dds <- DESeqDataSetFromMatrix(countData = counts_df,
                                   colData = design_matrix,

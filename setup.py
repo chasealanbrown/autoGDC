@@ -44,10 +44,9 @@ setup(
     keywords='bioinformatics meta-analysis GDC Genomic-Data-Commons data-repository',
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
-    install_requires=["wrenlab",
+    install_requires=[
                       "pandas",
-                      "cruzdb @ git+git://github.com/brentp/cruzdb.git@pull16",
-                      "oursql3 @ git+git://github.com/sqlobject/oursql.git@py3k",
                       "rpy2",
+                      "mygene"
                       ]
 )

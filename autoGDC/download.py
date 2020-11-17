@@ -1,36 +1,60 @@
 import json
+#import logging
 import requests
 import subprocess
+import pandas as pd
 from tqdm import tqdm
+from os import path
+from io import StringIO
 
 # Gene information
 import mygene
 
+# Local modules
+from .config import SETTINGS, LOG
+from .df_utils import column_expand, subset_paired_assay
 
-from .config import SETTING
-from .autoGDC import LOG
-from .df_utils import column_expand
+# Logger for downloader
+#logging.getLogger().setLevel(logging.INFO)
+#LOG = logging.getLogger(__name__)
 
 
-def download_url(url, filepath, params):
+def download_url(url, filepath, params = None):
   """
   Summary:
     Download a file from a specific url with a progress bar.
   Source:
     https://stackoverflow.com/questions/56795227/how-do-i-make-progress-bar-while-downloading-file-in-python#56796119
   """
+  LOG.info(f"Downloading {filepath} from {url} ...")
   with requests.get(url, stream=True, params = params) as r:
     r.raise_for_status()
     with open(filepath, 'wb') as f:
-      pbar = tqdm(total = int(r.headers['Content-Length']))
+      datasize = r.headers.get("Content-Length")
+      datasize = r.headers.get("content-length") if datasize is None else datasize
+      pbar = tqdm(total = None if datasize is None else int(datasize))
       for chunk in r.iter_content(chunk_size = 8192):
         if chunk:  # filter out keep-alive new chunks
           f.write(chunk)
           pbar.update(len(chunk))
   return
 
+def download_post(url: str, data: dict, headers: dict):
+  """
+  Summary:
+    Download data using POST on a REST API with a progress bar.
+  """
+  LOG.info(f"Downloading {data} from {url} ...")
+  with requests.post(data_endpt, data = json.dumps(data), headers = headers) as r:
+    r_head_cd = r.headers["Content-Disposition"]
+    file_name = re.findall("filename=(.+)", r_head_cd)[0]
 
-class Downloader:
+  with open(file_name, "wb") as output_file:
+    output_file.write(response.content)
+
+
+
+class Downloader(object):
   """
   Summary:
     Class to download data from GDC
@@ -74,11 +98,13 @@ class Downloader:
   def __init__(self,
                config_key: str = "default",
                params: dict = None,
-               file_ids: list = []):
+               paired_assay: bool = False):
 
-    self.conf = SETTING[config_key]
+    self.conf = SETTINGS[config_key]
     self.params = params
+    self.paired_assay = paired_assay
     self._file_ids = None
+    self._new_file_ids = None
     self._metadata = None
     self._manifest = None
     self._metadatabase = None
@@ -97,6 +123,23 @@ class Downloader:
       self._file_ids = self._get_file_ids()
     return self._file_ids
 
+  @property
+  def owned_file_ids(self):
+    if self._owned_file_ids is None:
+      self._owned_file_ids = self.metadatabase[self.metadatabase.downloaded]
+    return self._owned_file_ids
+
+
+  @property
+  def new_file_ids(self):
+    """
+    Summary:
+      The file_ids to be downloaded from GDC
+    """
+    if self._new_file_ids is None:
+      self._new_file_ids = list(set(self.file_ids) - set(self.owned_file_ids))
+    return self._new_file_ids
+
 
   @property
   def metadata(self):
@@ -106,7 +149,32 @@ class Downloader:
     """
     if self._metadata is None:
       self._metadata = self.metadatabase.loc[self.file_ids]
+      if self.paired_assay:
+        # TODO: This needs to be fixed by placing it in params
+        #       - if size is ~50, you won't get anything - becuase there aren't
+        #         enough file to get a match.  This is wrong.
+        #         We have to increase the size before getting to this point
+        self._metadata = subset_paired_assay(self._metadata)
+
     return self._metadata
+
+
+  @metadata.setter
+  def metadata(self, value):
+    """
+    Summary:
+      Sample metadata setter is provided in order to allow additional filtering
+      steps to occur outside of this class and set here.
+
+      This can be done prior to gathering the data into the main dataframe,
+      as the first step is to define the sample metadata, then to use
+      this sample metadata to construct the dataframes from the archive
+    """
+    LOG.info("""Be aware - setting the metadata prior to calling the
+    `study.dataframes` property will alter the filtering and
+    subsetting of `data.dataframes`.  You can use this functionality to reduce
+    the data downloaded/subset further than the original filter.""")
+    self._metadata = value
 
 
   @property
@@ -117,7 +185,7 @@ class Downloader:
         are desired for this specific download object.
         (This table is split up by the _download() function into chunks)
     """
-     if self._manifest is None:
+    if self._manifest is None:
       self._manifest = self._get_manifest()
     return self._manifest
 
@@ -128,7 +196,7 @@ class Downloader:
     Summary:
       The full table of all GDC metadata.
     """
-     if self._metadatabase is None:
+    if self._metadatabase is None:
       self._metadatabase = self._get_full_metadatabase()
     return self._metadatabase
 
@@ -142,14 +210,18 @@ class Downloader:
     # If we have already pulled the database, just open it
     #   otherwise download and store it
     if path.exists(self.conf["metadatabase_path"]):
-      return pd.read_csv(self.conf["metadatabase_path"])
+      return pd.read_csv(self.conf["metadatabase_path"],
+                         sep = '\t',
+                         compression = "gzip").set_index("id")
     else:
       # First we get the table provided by GDC
       #   of filenames, UUIDs, md5sum, etc.
       LOG.info("Downloading list of all files in the GDC...")
-      download_url(self.conf["gdc_filelist_url"],
-                   self.conf["metadatabase_path"])
-      metadatabase = pd.read_csv(self.conf["metadatabase_path"], gzip = True)
+      download_url(url = self.conf["gdc_filelist_url"],
+                   filepath = self.conf["metadatabase_path"])
+      metadatabase = pd.read_csv(self.conf["metadatabase_path"],
+                                 sep = '\t',
+                                 compression = "gzip").set_index("id")
 
       # Now download clinical and demographic metadata for each file
       LOG.info("Downloading metadata for all files in the GDC...")
@@ -168,13 +240,17 @@ class Downloader:
                                 "size": str(chunk_size),
                                 "from": str(pos)}
         to = pos+chunk_size
-        fp = path.join(self.conf["data_dir"], "metadata{pos}-{to}.json")
+        fp = path.join(self.conf["data_dir"], f"metadata{pos}-{to}.json")
         download_url(f"{self.api_url}/files", fp, full_metadata_params)
 
         metadatachunk = self._metadata_json_to_tsv(fp, nan_threshold = nan_threshold)
         metadatabase.join(metadatachunk)
 
-      metadatabase.to_csv(self.conf["metadatabase_path"])
+      # Include tracker of what is downloaded and not
+      self.metadatabase["downloaded"] = False
+      metadatabase.to_csv(self.conf["metadatabase_path"],
+                          sep = '\t',
+                          compression = "gzip")
       return metadatabase
 
   def _metadata_json_to_tsv(self,
@@ -190,20 +266,20 @@ class Downloader:
       df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
 
 	# Expand all of the dictionaries and lists within each column
-    df = df_utils.column_expand(df, "cases")
-    df = df_utils.column_expand(df, "demographic")
-    df = df_utils.column_expand(df, "project")
-    df = df_utils.column_expand(df, "diagnoses")
-    df = df_utils.column_expand(df, "follow_ups")
-    df = df_utils.column_expand(df, "samples")
-    df = df_utils.column_expand(df, "portions")
-    df = df_utils.column_expand(df, "analytes")
-    df = df_utils.column_expand(df, "aliquots")
+    df = column_expand(df, "cases")
+    df = column_expand(df, "demographic")
+    df = column_expand(df, "project")
+    df = column_expand(df, "diagnoses")
+    df = column_expand(df, "follow_ups")
+    df = column_expand(df, "samples")
+    df = column_expand(df, "portions")
+    df = column_expand(df, "analytes")
+    df = column_expand(df, "aliquots")
 
     # Convert strings denoting nulls into proper null values
 	#   TODO: This can likely be much faster with things like `.fillna()`
     #         or at least not using `applymap()`
-	df = df.applymap(lambda x:
+    df = df.applymap(lambda x:
                      # Perhaps this could be pd.NA?
                      np.nan if any(s == str(x).lower()
                                    for s in self.conf["null_type_strings"])
@@ -218,8 +294,7 @@ class Downloader:
     if "age_at_diagnosis" in df.columns:
       df["age"] = np.round(df["age_at_diagnosis"]/365, 2)
 
-    # The file UUID as index
-    #   for comparison when determining download requirements
+    # The file UUID as index is necessary to join with metadatabase
     df = df.set_index("id")
 
     LOG.info(f"Downloaded df database of {df.shape[0]} files.")
@@ -239,14 +314,18 @@ class Downloader:
     params = self.params
     params["fields"] = "file_id"
 
+    # TODO:
+    #     This is a band-aid fix to problem small sizes on paired data
+    if self.paired_assay:
+      params["size"] = "1000000"
     response = requests.get(f"{self.api_url}/files", params = params)
-    response_file = io.StringIO(response.content.decode("utf-8"))
+    response_file = StringIO(response.content.decode("utf-8"))
     try:
       response_df = pd.read_csv(response_file, sep = "\t")
       LOG.debug(f"""Query for GDC file_ids returned the following dataframe:
                 \n{response_df}""")
-      file_ids = response_df["ids"].tolist()
-    except EmptyDataError as e:
+      file_ids = response_df["id"].tolist()
+    except ValueError as e:
       LOG.warn(f"It appears that there were no samples that fit the criteria.")
       LOG.exception(e)
       file_ids = []
@@ -259,10 +338,10 @@ class Downloader:
       Retrieves the manifest table to store as a property for this download.
     """
     # Create *complete* manifest file for downloading the files
-    boolmask = self.metadatabase.ids.isin(self.file_ids)
-    manifest = self.metadatabase.loc[self.file_ids][["file_name",
-                                                     "md5sum",
-                                                     "file_size"]]
+#    boolmask = self.metadatabase.ids.isin(self.new_file_ids)
+    manifest = self.metadatabase.loc[self.new_file_ids][["file_name",
+                                                         "md5sum",
+                                                         "file_size"]]
     manifest["state"] = "validated"
     manifest.columns = ["filename", "md5", "size", "state"]
     return manifest
@@ -291,11 +370,11 @@ class Downloader:
         if not path.exists(metadata_path):
           LOG.info("Downloading feature metadata to data directories...")
           download_url(url, metadata_path)
-    elif "RNA" in assay:
-      # TODO:
-      #   Download information from mygene and store it
-      #   Use MyGene to gather data and store it in a pd.DataFrame
-      self.mg
+      elif "RNA" in assay:
+        # TODO:
+        #   Download information from mygene and store it
+        #   Use MyGene to gather data and store it in a pd.DataFrame
+        self.mg
     return True
 
 
@@ -315,26 +394,34 @@ class Downloader:
 
     # Process the manifest in chunks for download
     LOG.info(f"Starting download of {manifest.shape[0]} files")
-    for position in tqdm(range(0, len(self.manifest), chunk_size)):
-      # Debugging
-      pct_dn = round( position/len(self.manifest) * 100.0, 2)
-      msg = f"Downloading chunk of {chunk_size} files... ({pct_dn}% finished)"
-      LOG.debug(msg)
+    download_post(url = f"{gdc_api_url}/data",
+                   data = {"ids": self.new_file_ids},
+                   headers = {"Content-Type": "application/json"})
 
-      chunk = self.manifest.iloc[position: position + chunk_size]
-
-      temp_manifest_file = path.join(self.config["data_dir"],
-                                     "temporary_manifest.txt")
-      chunk.to_csv(temp_manifest_file, sep = "\t")
-      subprocess.call([gdc_client_path,
-                       "download",
-                       "-m",
-                       temp_manifest_file,
-                       "--dir",
-                       self.config["rawdata_dir"]])
-
+#    for position in tqdm(range(0, len(self.manifest), chunk_size)):
+#      # Debugging
+#      pct_dn = round( position/len(self.manifest) * 100.0, 2)
+#      msg = f"Downloading chunk of {chunk_size} files... ({pct_dn}% finished)"
+#      LOG.debug(msg)
+#
+#      chunk = self.manifest.iloc[position: position + chunk_size]
+#
+#      temp_manifest_file = path.join(self.config["data_dir"],
+#                                     "temporary_manifest.txt")
+#      chunk.to_csv(temp_manifest_file, sep = "\t")
+#      subprocess.call([gdc_client_path,
+#                       "download",
+#                       "-m",
+#                       temp_manifest_file,
+#                       "--dir",
+#                       self.config["newdata_dir"]])
+#
     LOG.info("All files have been downloaded.")
     self._download_feature_metadata()
 
+    self.metadatabase["downloaded"].loc[self.new_file_ids] = True
+    self.metadatabase.to_csv(self.conf["metadatabase_path"],
+                             sep = '\t',
+                             compression = "gzip")
     return True
 

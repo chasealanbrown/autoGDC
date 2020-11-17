@@ -1,4 +1,11 @@
+import re
+import logging
+import numpy as np
 from os import path, listdir
+
+# Logger for package
+logging.getLogger().setLevel(logging.INFO)
+LOG = logging.getLogger("autoGDC")
 
 # Full list of all files in the GDC
 gdc_filelist_url = "https://docs.gdc.cancer.gov/Data/Release_Notes/gdc_manifest_20201109_data_release_27.0_active.tsv.gz"
@@ -15,7 +22,7 @@ DNAm_450k_url = "https://www.dropbox.com/s/wyck0lsa6941utw/HumanMethylation450_f
 this_dir = path.dirname(path.realpath(__file__))
 
 # Binary program released by GDC for downloading files
-gdc_client_path = path.join(this_dir, "bin", "gdc-client")
+gdc_client_path = path.join(this_dir, "..", "bin", "gdc-client")
 
 # Different system configurations for data directory locations
 default_data_dir = path.join(this_dir, "data", "archive")
@@ -26,7 +33,7 @@ default_mg_dir = path.join(this_dir, "data", "mygene")
 wrenlab_mg_dir = path.join("data", "databases", "mygene")
 
 # Load the GDC API key for access to controlled data
-with open("GDC_API.key") as f:
+with open(path.join(this_dir, "GDC_API.key")) as f:
   s = f.read()
   if s == "":
     gdc_api_key = None
@@ -99,6 +106,8 @@ gdc_settings = {
              "submitter_id",
              "primary_site",
              "archive.state",
+             "cause_of_death",
+             "cause_of_death_source",
              "files.data_category",
              "analysis.workflow_type",
              "cases.submitter_id",
@@ -146,23 +155,50 @@ gdc_settings = {
              "cross-mapped": str,
              "miRNA_region": str},
 
-    "filetype_regexs":
-            {"DNAm_450":"HumanMethylation450",
-             "DNAm_27":"HumanMethylation27",
-             "RNA_FPKM":"FPKM.txt",
-             "RNA_FPKM-UQ":"FPKM-UQ",
+    "filetype_regexes":
+            {"DNAm_450":re.compile("HumanMethylation450"),
+             "DNAm_27":re.compile("HumanMethylation27"),
+             "RNA_FPKM":re.compile("FPKM\.txt"),
+             "RNA_FPKM-UQ":re.compile("FPKM[\-\.]UQ"),
              # Files can have either '-' or '.' in name
-             "RNA_counts":"htseq[\.\-]counts.gz",
-             "RNA_miRNA":"mirnas.quantification",
-             "RNA_isoforms":"isoforms.quantification"},
+             "RNA_counts":re.compile("htseq[\.\-]counts.gz"),
+             "RNA_miRNA":re.compile("mirnas[\.\-]quantification"),
+             "RNA_isoforms":re.compile("isoforms[\.\-]quantification")},
 
-    "null_type_strings":["not reported", "--", "na", "n/a", "null", "none"],
+    "null_type_strings":
+            ["not reported",
+             "unknown",
+             "--",
+             "na",
+             "n/a",
+             "null",
+             "none"],
 
     "gdc_client_path": gdc_client_path,
     "gdc_filelist_url": gdc_filelist_url,
     "DNAm_450k_url": DNAm_450k_url,
     "DNAm_27k_url": DNAm_27k_url,
 }
+
+assay_readparams = {
+    assay:
+             {"values_name": "beta_value" if "DNAm" in assay else "value",
+              "index_name": "loci" if "DNAm" in assay else "index",
+              "dtypes": gdc_settings["meth_dtypes"] if "DNAm" in assay
+                          else (gdc_settings["mirna_dtypes"]
+                                if assay in ["RNA_miRNA","RNA_isoforms"]
+                                else None),
+              "header": None if assay in ["RNA_counts",
+                                               "RNA_FPKM",
+                                               "RNA_FPKM-UQ"] else 0,
+              "subset_cols": [0,1] if "DNAm" in assay
+                                   else ([0,3] if assay == "RNA_isoforms"
+                                               else([0,2] if assay == "RNA_miRNA"
+                                                     else None))
+              }
+  for assay in gdc_settings["filetype_regexes"]}
+
+gdc_settings["assaytype_readparams"] = assay_readparams
 
 ###############################################################################
 # These values keep track of computer configurations
@@ -179,12 +215,13 @@ local_settings = {
                   #   may not work for the user
                   "default":
                     {"data_dir": default_data_dir,
+                     "newdata_dir": path.join(default_data_dir, "new"),
                      "rawdata_dir": path.join(default_data_dir, "raw"),
                      "mygene_dir": default_mg_dir,
                      "metadatabase_path": path.join(default_data_dir, "metadatabase.tsv.gz"),
                      "assay_dirs":
                      {assay_dir: path.join(default_data_dir, assay_dir)
-                      for assay_dir in gdc_settings["filetype_regexs"].keys()},
+                      for assay_dir in gdc_settings["filetype_regexes"]},
                      "DNAm_450k_metadata_filepath":
                      path.join(default_data_dir, "DNAm_450", "feature_metadata.tsv"),
                      "DNAm_27k_metadata_filepath":
@@ -197,12 +234,13 @@ local_settings = {
                   #    for storage of larger files)
                   "wrenlab":
                     {"data_dir": wrenlab_data_dir,
+                     "newdata_dir": path.join(wrenlab_data_dir, "new"),
                      "rawdata_dir": path.join(wrenlab_data_dir, "raw"),
                      "mygene_dir": wrenlab_mg_dir,
                      "metadatabase_path": path.join(wrenlab_data_dir, "metadatabase.tsv.gz"),
                      "assay_dirs":
                      {assay_dir: path.join(wrenlab_data_dir, assay_dir)
-                      for assay_dir in gdc_settings["filetype_regexs"].keys()},
+                      for assay_dir in gdc_settings["filetype_regexes"]},
                      "DNAm_450k_metadata_filepath":
                      path.join(wrenlab_data_dir, "DNAm_450", "feature_metadata.tsv"),
                      "DNAm_27k_metadata_filepath":
@@ -214,8 +252,8 @@ local_settings = {
 # Store all of these settings in a dictionary, keyed by the local_settings key
 #   (Such that we can obtain the correct settings
 #       given a config_key, such as 'wrenlab', across all classes)
-SETTINGS = {config_key: gdc_settings\
-                            .update(lclvals)#\
+SETTINGS = {config_key: dict(gdc_settings, **lclvals)
+#                            .update(lclvals)#\
 #                            .update(dataset_settings)\
             for config_key, lclvals in local_settings.items()}
 

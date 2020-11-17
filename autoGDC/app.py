@@ -1,5 +1,6 @@
 # General dependencies
-import logging
+import json
+#import logging
 import numpy as np
 import pandas as pd
 
@@ -7,14 +8,14 @@ import pandas as pd
 from geode import chdir as characteristic_direction
 
 # Local module imports
+from .config import SETTINGS, LOG
 from .df_utils import *
-from .R.wrapper import pydeseq
 from .store import Archive
-from .config import SETTING
+#from .R import wrappers as r_wrappers
 
 # Logger for autoGDC
-logging.getLogger().setLevel(logging.INFO)
-LOG = logging.getLogger(__name__)
+#logging.getLogger().setLevel(logging.INFO)
+#LOG = logging.getLogger(__name__)
 
 
 class Dataset:
@@ -44,9 +45,6 @@ class Dataset:
     paired_assay:
       Force the data to contain only cases
         wherein all assay types are represented
-
-    data_dir:
-      full path to the directory containing the GDC downloaded data
 
     methyl_loci_subset:
       List of features that will be extracted from the overall GDC dataset
@@ -100,34 +98,30 @@ class Dataset:
                fields: list = None,
                size: int = 10,
                contrasts: list = None,
-               paired_assay: bool = False):
+               paired_assay: bool = False,
+			   quantile: bool = True):
 
-    self.conf = SETTING[config_key]
+    self.conf = SETTINGS[config_key]
     if fields is None:
       fields = self.conf["fields"]
     else:
       fields = fields
+
     self.params = {"filters" : json.dumps(filt),
                    "format" : "tsv",
                    "fields" : ",".join(fields),
                    "size" : str(size)}
 
-    self.paired_assay = paired_assay
-    self.contrasts = contrasts
-
     self.archive = Archive(config_key = config_key,
-                           params = self.params)
+                           params = self.params,
+                           paired_assay = paired_assay)
 
-    self._metadata = None
+    self.contrasts = contrasts
     self._data = None
-    self._frame = None
-
 
   @property
   def metadata(self):
-    if self._metadata is None:
-      self._metadata = self._get_metadata()
-    return self._metadata
+    return self.archive.metadata
 
 
   @metadata.setter
@@ -141,111 +135,59 @@ class Dataset:
       as the first step is to define the sample metadata, then to use
       this sample metadata to construct the dataframes from the archive
     """
-    self._metadata = value
+    LOG.info("""Be aware - setting the metadata prior to calling the
+    `study.dataframes` property will alter the filtering and
+    subsetting of `data.dataframes`.  You can use this functionality to reduce
+    the data downloaded/subset further than the original filter.""")
+    self.archive.metadata = value
 
 
   @property
   def data(self):
+    """
+    Summary:
+      A simple property that allows easy access to all
+        of the data for this dataset
+    """
     if self._data is None:
       self._data = self._get_data()
     return self._data
 
 
-  @property
-  def frame(self):
-    if self._frame is None:
-      self._frame = self._get_frame()
-    return self._frame
-
-
   def _get_data(self):
-    data_dict = {"RNA": {"miRNA": None,
-                         "isoforms": None,
-                         "counts": None,
-                         "FPKM": None,
-                         "FPKM-UQ": None},
-                 "DNAm": {"450": None,
-                          "27": None,
-                          "meta450": None,
-                          "meta27": None}}
+    data = {}
 
     # All file ids in dataframe
-    study_ids = set(self.metadata.index.tolist())
-    LOG.debug(f"UUIDs for entire study are: {study_ids}")
+    LOG.debug(f"The file_ids for the entire dataset are: {self.archive.file_ids}")
 
     # File ids already available locally
-    owned_ids = set([path.splitext(file_id.rstrip(".gz"))[0]
-                             for assay, assaydir in self.data_dirs.items()
-                             if assay not in ["raw", "main"]
-                             for file_id in os.listdir(assaydir)
-                             if 'metadata' not in file_id])
-
-    LOG.debug(f"Total UUIDs already downloaded are: {owned_ids}")
+    LOG.debug(f"Total file_ids already downloaded are: {self.archive.owned_file_ids}")
 
     # File ids required to download
-    download_ids = study_ids - owned_ids
-    LOG.info("Downloading these file_ids:" + str(download_ids))
-    if download_ids:
-      self._download(list(download_ids))
+    LOG.info("Downloading these file_ids:\n{self.archive.new_file_ids}")
+    if self.archive.new_file_ids:
+       # This one line does the follwing:
+       #   1) Downloads all relevant data
+       #   2) Organizes the new data
+       #        - Moves/deletes files
+       #        - Creates/Adds to HDF5 databases
+       self.archive._update()
 
-    LOG.info("Creating dataframes...")
 
-    # Get a dataframe for each assay type
-    for filetype in self.file_types.keys():
-      assaydir_name = filetype.replace(".", "_")
-      assaydir = self.data_dirs[assaydir_name]
+    LOG.info("Querying databases for dataset frames...")
+    for assay in tqdm(self.archive.databasefiles):
+      LOG.info(f"Querying {assay}...")
+      data[assay] = self.archive._read_dataframe(assay)
+      # TODO: Figure out a way to store the quantile normed data
+      #         - could be just in the HDF5, but needs to have additional
+      #           parameter to recalc with more data every so often?
+      if self.quantile:
+        LOG.info(f"Quantile normalization of {assay}...")
+        data[assay] = df_utils.quantile(data[assay])
 
-      # Get all of the files pertaining to this study
-      for filename in os.listdir(assaydir):
-        filepath = path.join(assaydir, filename)
-        uuid = path.basename(path.splitext(filename.rstrip(".gz"))[0])
-        if uuid in study_ids:
-          self.file_types[filetype] += [filepath]
-
-      # Create dataframe
-      LOG.info(f"{assaydir_name} DataFrame...")
-
-      # Caching requires copies of each item
-      #   such that inputs are not dependent upon `self`
-      fpths = (self.file_types[filetype] + [""])[:-1]
-      if "Methylation" in assaydir_name:
-        if "450" in assaydir_name:
-          assay_subtype = "450"
-        else:
-          assay_subtype = "27"
-
-        data_dict["DNA Methylation"][assay_subtype] = \
-                df_utils.quantile(
-                        multifile_df(
-                            sorted(fpths),
-                            subset_features = self.methyl_loci_subset
-                            )
-                        )
-
-        # Metadata
-        metadata_fpath = path.join(assaydir, "feature_metadata.tsv")
-        data_dict["DNA Methylation"]["meta"+assay_subtype] = \
-                pd.read_csv(metadata_fpath,
-                            sep = "\t",
-                            index_col = 0)
-      else:
-        main_assay_type = "Transcriptome Profiling"
-        if "counts" in assaydir_name:
-          assay_subtype = "counts"
-        elif "FPKM-UQ" == assaydir_name:
-          assay_subtype = "FPKM-UQ"
-        elif "FPKM_txt" == assaydir_name:
-          assay_subtype = "FPKM"
-        elif "isoforms" in assaydir_name:
-          assay_subtype = "isoforms"
-        elif "mirna" in assaydir_name:
-          assay_subtype = "miRNA"
-
-        data_dict[main_assay_type][assay_subtype] = \
-                                       df_utils.quantile(multifile_df(sorted(fpths)))
-
-    gc.collect()
-    LOG.info("Finished constructing data structure...")
+    LOG.info("Constructing paired RNA and DNA methylation dataframe...")
+    if self.paired_assay:
+      data["RNA_DNAm"] = self._paired_rna_dnam_dataframe()
 
     return data_dict
 
@@ -281,7 +223,7 @@ class Dataset:
                    pos_bounds = (-1500, 0)):
 
     # The 450k loci chip should have the coverage we need
-    meta = self.data["DNA Methylation"]["meta450"]
+    meta = self.data["DNAm_450"].columns.to_frame()
 
     # Assume each loci is associated with the first gene in list
     # Loci with non-null genes
@@ -312,7 +254,7 @@ class Dataset:
                                    & (loci_per_gene <= max_seq)].index
     filtered_loci = meta[meta[collapse_level].isin(filtered_genes)]
 
-    filt_methdf = self.data["DNA Methylation"]["450"]\
+    filt_methdf = self.data["DNAm_450"]\
                                 .reindex(filtered_loci.index).dropna()
 
     # change position to be bounded between 0 and 1
@@ -322,24 +264,24 @@ class Dataset:
     return filt_methdf, filtered_loci
 
 
-  def _get_frame(self,
-                 collapse_level = "Gene_Symbol",
-                 agg_func = list,
-                 position_col = "Position_to_TSS",
-                 min_seq_len = 15,
-                 max_seq_len = 25,
-                 pos_bounds = (-1500, 1000)):
+  def _paired_rna_dnam_dataframe(self,
+                                 collapse_level = "Gene_Symbol",
+                                 agg_func = list,
+                                 position_col = "Position_to_TSS",
+                                 min_seq_len = 15,
+                                 max_seq_len = 25,
+                                 pos_bounds = (-1500, 1000)):
     """
       This multi-indexed dataframe combines the RNA and DNAm data
     """
 
-    dfs_dict = self.data["Transcriptome Profiling"]
     filt_methdf, filtered_loci = self._filter_loci(min_seq = min_seq_len,
                                                max_seq = max_seq_len,
                                                collapse_level = collapse_level,
                                                position_col = position_col,
                                                pos_bounds = pos_bounds)
 
+    dfs_dict = self.data["RNA_counts"]
     df = df_utils.combined_region_collapsed_frame(dfs_dict = dfs_dict,
                                           main_seq_data = filt_methdf,
                                           seq_feature_metadata = filtered_loci,
@@ -352,19 +294,19 @@ class Dataset:
 
 
   def ddx(self,
-          contrasts = None,
-          formula = None,
-          DESeq2 = True):
+          contrasts: list = None,
+          formula: str = None,
+          deseq2: bool = True):
     if contrasts is None:
       contrasts = self.contrasts
     if formula is None:
       formula = "~"+"+".join(self.contrasts)
 
-    df = self.data["Transcriptome Profiling"]['counts'].astype(int)
+    df = self.data["RNA_counts"].astype(int)
     design = self.metadata[contrasts].reindex(df.columns).reset_index()
 
-    if DESeq2:
-        DEG = pydeseq(counts = df, design = design, formula = formula)
+    if deseq2:
+        DEG = r_wrappers.pydeseq(counts = df, design = design, formula = formula)
     else:
       # Characteristic Direction (Multivariate statistical method)
       # 0 excluded, 1 is control, 2 is perturbation
