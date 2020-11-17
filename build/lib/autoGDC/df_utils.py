@@ -1,10 +1,15 @@
 import os
 import time
+#import logging
 import numpy as np
 import pandas as pd
 
 from autoGDC import LOG
 #from joblib import Memory
+
+#logging.getLogger().setLevel(logging.INFO)
+#LOG = logging.getLogger(__name__)
+#LOG.setLevel(logging.INFO)
 
 #def init_cache():
 #    CACHE_DIRECTORY = os.path.expanduser("~/.cache/autoGDC/cache/")
@@ -13,95 +18,6 @@ from autoGDC import LOG
 #    return memory
 #
 #memoize = init_cache().cache
-
-
-def column_expand(df, col: str):
-    firstelem = df[col].dropna().tolist()[0]
-    if isinstance(firstelem, list):
-        #   *Almost all* of these rows have a list value, with
-        #   one value in the list.
-        # TODO: We make an assumption here that the other values are not
-        #       important.
-        non_singular = df[col].dropna().apply(len) > 1
-        non_singular_ix = non_singular[non_singular].index
-        if non_singular.sum() > 0:
-            print(f"WARNING\nThe following values were not only one element:")
-            print(df.loc[non_singular_ix])
-
-        # Assuming only signular elements
-        tmp_df = pd.DataFrame([{} if type(_) is float else _[0] for _ in df[col]])
-
-    if isinstance(firstelem, dict):
-        tmp_df = pd.DataFrame([{_:_} if type(_) is float else _ for _ in df[col]])
-    df = df.drop(col, axis = 1).join(tmp_df, rsuffix = f"_for_{col}")
-    return df
-
-def read_and_filter(filepath: str,
-                    subset_features: list = None):
-  """
-  Summary:
-    Reads a tsv file, formats any gene names, and renames it to GDC's `file_id`
-
-  Arguments:
-    filepath:
-      Path to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-  # Read the series
-  #   (which was saved and compress during download phase)
-  series = pd.read_csv(filepath,
-                       sep = "\t",
-                       index_col = 0,
-                       header = None,
-                       engine = "c",
-                       squeeze = True)
-
-  # Rename it to be the filename / file_id
-  file_id = path.splitext(path.basename(filepath.rstrip(".gz")))[0]
-  series.name = file_id
-
-  series = series[~series.index.duplicated(keep="first")]
-
-  # Select subset of features
-  if subset_features:
-    series = series.reindex(subset_featuees)
-  return series
-
-
-#@memoize
-def multifile_df(file_paths: list,
-                 subset_features: list = None):
-  """
-  Summary:
-    Reads a list of tsv files, formats any gene names,
-      and renames it to GDC's `file_id`
-
-  Arguments:
-    filepaths:
-      List of paths to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-#  kwargs = {"subset_features": subset_features}
-
-  # IO bound
-  # Parallel imap with progress bar
-  # series_iter = p_imap(partial(read_and_filter, **kwargs), file_paths)
-  series_list = [read_and_filter(fp, subset_features)
-                      for fp in tqdm(file_paths)]
-
-  # Concatenate all series
-  df = pd.DataFrame({s.name:s for s in series_list})
-
-  df.columns.name = "file_id"
-  return df.dropna(how = "all")
-
-
 
 
 def contains_all_substrings(main_list, substr_list):

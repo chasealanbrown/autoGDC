@@ -23,9 +23,6 @@ class Archive(Collator):
                      params = params)
     self.conf = SETTING[config_key]
 
-    self._databases = None
-    self._files
-
   def _read_dataframe(self, assay_filepath):
     data = pd.read_h5(assay_filepath, "data")
     sample_metadata = pd.read_h5(assay_filepath, "sample_metadata")

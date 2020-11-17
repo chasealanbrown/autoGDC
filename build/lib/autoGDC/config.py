@@ -1,9 +1,5 @@
 from os import path, listdir
 
-# Full list of all files in the GDC
-gdc_filelist_url = "https://docs.gdc.cancer.gov/Data/Release_Notes/gdc_manifest_20201109_data_release_27.0_active.tsv.gz"
-
-
 # Infinium feature metadata
 #DNAm_27k_url = "https://support.illumina.com/content/dam/illumina-support/documents/downloads/productfiles/humanmethylation27/productsupportfiles/illumina_humanmethylation27_content.xlsx"
 # Wrenlab feature metadata
@@ -159,7 +155,6 @@ gdc_settings = {
     "null_type_strings":["not reported", "--", "na", "n/a", "null", "none"],
 
     "gdc_client_path": gdc_client_path,
-    "gdc_filelist_url": gdc_filelist_url,
     "DNAm_450k_url": DNAm_450k_url,
     "DNAm_27k_url": DNAm_27k_url,
 }
@@ -179,9 +174,7 @@ local_settings = {
                   #   may not work for the user
                   "default":
                     {"data_dir": default_data_dir,
-                     "rawdata_dir": path.join(default_data_dir, "raw"),
                      "mygene_dir": default_mg_dir,
-                     "metadatabase_path": path.join(default_data_dir, "metadatabase.tsv.gz"),
                      "assay_dirs":
                      {assay_dir: path.join(default_data_dir, assay_dir)
                       for assay_dir in gdc_settings["filetype_regexs"].keys()},
@@ -197,9 +190,7 @@ local_settings = {
                   #    for storage of larger files)
                   "wrenlab":
                     {"data_dir": wrenlab_data_dir,
-                     "rawdata_dir": path.join(wrenlab_data_dir, "raw"),
                      "mygene_dir": wrenlab_mg_dir,
-                     "metadatabase_path": path.join(wrenlab_data_dir, "metadatabase.tsv.gz"),
                      "assay_dirs":
                      {assay_dir: path.join(wrenlab_data_dir, assay_dir)
                       for assay_dir in gdc_settings["filetype_regexs"].keys()},

@@ -1,6 +1,6 @@
 # autoGDC
 
-![logo](autoGDC_logo.png)
+![logo](https://raw.githubusercontent.com/chasealanbrown/autoGDC/master/autoGDC_logo.png)
 
 This package was created for automatic downloading and processing of Genomic Data Commons data.
 
@@ -9,12 +9,10 @@ The GDC is a great resource; however the process of downloading the data and com
 
 Examples of a few questions that may be explored are provided:
 
-<ol>
-  <li>*DNA Methylation Clock*: What sites are chosen when training a DNA methylation clock model?  How do they differ when different techniques are applied to retreive these sites?</li>
-  <li>*RNA vs. DNA methylation*: What is the correlation between transcription and DNAm for paired data?</li>
-  <li>*DNA methylation sequence modeling*: How much information is contained within sequence information of DNA methylation with respect to transcription?</li>
-  <li>*Glioblastoma Differential Gene Expression*: What is the DEG signature for glioblastoma patients?</li>
-</ol>
+* DNA Methylation Clock: What sites are chosen when training a DNA methylation clock model?  How do they differ when different techniques are applied to retreive these sites?
+* RNA vs. DNA methylation: What is the correlation between transcription and DNAm for paired data?
+* DNA methylation sequence modeling: How much information is contained within sequence information of DNA methylation with respect to transcription?
+* Glioblastoma Differential Gene Expression: What is the DEG signature for glioblastoma patients?
 
 These examples can help provide as a basis for how to use this package effectively.
 

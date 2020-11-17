@@ -4,7 +4,7 @@
 #import gc
 #import json
 #import shutil
-import logging
+#import logging
 #import hashlib
 #import requests
 #import subprocess
@@ -18,110 +18,123 @@ import logging
 #from geode import chdir as characteristic_direction
 #
 ## Local module imports
-from config import SETTING
-#from . import df_utils
-from download import Downloader
-
-# Gene information
-import mygene
-
-# Logger for collator
-logging.getLogger().setLevel(logging.INFO)
-LOG = logging.getLogger(__name__)
+from .config import SETTING
+from .autoGDC import LOG
+from .download import Downloader
 
 
-def read_and_filter(filepath: str,
-                    subset_features: list = None):
-  """
-  Summary:
-    Reads a tsv file, formats any gene names, and renames it to GDC's `file_id`
-
-  Arguments:
-    filepath:
-      Path to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-  # Read the series
-  #   (which was saved and compress during download phase)
-  series = pd.read_csv(filepath,
-                       sep = "\t",
-                       index_col = 0,
-                       header = None,
-                       engine = "c",
-                       squeeze = True)
-
-  # Rename it to be the filename / file_id
-  file_id = path.splitext(path.basename(filepath.rstrip(".gz")))[0]
-  series.name = file_id
-
-  series = series[~series.index.duplicated(keep="first")]
-
-  # Select subset of features
-  if subset_features:
-    series = series.reindex(subset_featuees)
-  return series
-
-
-#@memoize
-def multifile_df(file_paths: list,
-                 subset_features: list = None):
-  """
-  Summary:
-    Reads a list of tsv files, formats any gene names,
-      and renames it to GDC's `file_id`
-
-  Arguments:
-    filepaths:
-      List of paths to tsv downloaded from GDC
-
-    subet_features:
-      Subset of the features as a list
-  """
-
-#  kwargs = {"subset_features": subset_features}
-
-  # IO bound
-  # Parallel imap with progress bar
-  # series_iter = p_imap(partial(read_and_filter, **kwargs), file_paths)
-  series_list = [read_and_filter(fp, subset_features)
-                      for fp in tqdm(file_paths)]
-
-  # Concatenate all series
-  df = pd.DataFrame({s.name:s for s in series_list})
-
-  df.columns.name = "file_id"
-  return df.dropna(how = "all")
-
-class Collator:
+class Collator(Downloader):
   def __init__(self,
                config_key: str = "default",
                params: dict = None):
 
+    super().__init__(config_key = config_key,
+                     params = params)
     self.conf = SETTING[config_key]
-    self.downloader = Downloader(config_key = config_key,
-                                 params = params)
-    self.mg = mygene.MyGeneInfo()
-    self.mg.set_caching(cache_db = self.conf["mygene_dir"])
 
 
-  def _feature_metadata_check(self):
-    LOG.debug("Checking DNA methylation feature metadata...")
+  def _organize_files(self):
+    # Now move and rename each file - then extract metadata and gzip
+    LOG.info("Reorganizing...")
 
-    # Check if feature metadata exists for each assay
-    for assay, assay_dir in self.conf["assay_dirs"].items():
-      if "DNAm" in assay:
-        metadata_path = path.join(assay_dir, "feature_metadata.tsv")
+    # Each directory in the raw directory
+    rawpath = self.data_dirs["raw"]
+    for d in tqdm(os.listdir(rawpath)):
+      dpath = path.join(rawpath, d)
 
-        # If it isn't there, put it there
-        #   (using a local git file now - need to use git LFS or ipfs)
-        if not path.exists(metadata_path):
-          LOG.info("Moving feature metadata to data directories...")
-          std_metadata_fname = f"{assay}_feature_metadata.tsv"
-          std_metadata_path = path.join(this_path, "data", std_metadata_fname)
-          shutil.copy(std_metadata_path, metadata_path)
+      if not path.isfile(dpath):
 
-    return True
+        # For each of the files
+        #   (The directory should only have 1 or 2 files)
+        for f in os.listdir(dpath):
+          fpath = path.join(dpath, f)
+
+          # Just the bioassay files (not log directory files)
+          if path.isfile(fpath):
+
+            # Find the assay type (in the filename)
+            #   make the new filename the file_id
+            #   and store the file in the assay directory
+            for typ in self.file_types.keys():
+              if typ in f:
+
+                # Read files and remove the metadata
+                if "Methylation" in typ:
+                  # Methylation data is a lot larger due to metadata
+                  # Use dtypes and the C engine for the reading of these files
+                  dtypes = meth_dtypes
+                  header = 0
+                  subset_cols = [0, 1]
+                  values_name = "beta_value"
+                  index_name = "loci"
+
+                elif "quantification" in typ:
+                  dtypes = mirna_dtypes
+                  header = 0
+                  if "isoform" in typ:
+                    subset_cols = [0,3]
+                  else:
+                    subset_cols = [0,2]
+                  values_name = "value"
+                  index_name = "index"
+
+                else:
+                  dtypes = None
+                  header = None
+                  subset_cols = None
+                  values_name = "value"
+                  index_name = "index"
+
+                LOG.debug(f"Reading {fpath}")
+                try:
+                  # Load data (without extra metadata) into memory
+                  series = pd.read_csv(fpath,
+                                       sep = "\t",
+                                       index_col = 0,
+                                       header = header,
+                                       usecols = subset_cols,
+                                       dtype = dtypes,
+                                       engine = "c").iloc[:,0]
+
+                  # Change to gene name instead of ENSG
+                  if series.index[0].startswith("ENSG"):
+                    series.index = [ix.split(".")[0] for ix in series.index]
+                    # series.index = series.index.map(gene_id_name)
+                    series.index = [gene_id_name.loc[transcript]
+                                    if transcript in gene_ensg_set
+                                    else transcript
+                                    for transcript in series.index]
+                    series = series.loc[series.index.dropna()]
+
+                  series.name = values_name
+                  series.index.name = index_name
+
+                  # Remove the non compressed file
+                  os.remove(fpath)
+
+                  # Save the file as gzipped without extra metadata
+                  gz_path = path.basename(path.splitext(
+                                            fpath.rstrip(".gz"))[0]) +".tsv.gz"
+                  LOG.debug(f"Saving {gz_path}")
+                  series.to_csv(gz_path,
+                                sep='\t',
+                                compression='gzip')
+
+                  # Define new place to move the file
+                  #   `d` should be the UUID of the file
+                  new_filename = d + ".tsv.gz"
+                  new_dir = self.data_dirs[typ.replace(".", "_")]
+                  new_path = path.join(new_dir, new_filename)
+
+                  # Move the file
+                  LOG.debug(f"Moving {gz_path} to {new_path}")
+                  shutil.move(gz_path, new_path)
+
+                  # Remove the whole directory that was downloaded
+                  shutil.rmtree(dpath)
+
+                except:
+                    LOG.info(f"Error processing file: {fpath}")
+
+    return
 
