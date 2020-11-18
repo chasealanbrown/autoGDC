@@ -3,6 +3,7 @@ import json
 import requests
 import subprocess
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 from os import path
 from io import StringIO
@@ -13,10 +14,6 @@ import mygene
 # Local modules
 from .config import SETTINGS, LOG
 from .df_utils import column_expand, subset_paired_assay
-
-# Logger for downloader
-#logging.getLogger().setLevel(logging.INFO)
-#LOG = logging.getLogger(__name__)
 
 
 def download_url(url, filepath, params = None):
@@ -38,6 +35,7 @@ def download_url(url, filepath, params = None):
           f.write(chunk)
           pbar.update(len(chunk))
   return
+
 
 def download_post(url: str, data: dict, headers: dict):
   """
@@ -103,6 +101,7 @@ class Downloader(object):
     self.conf = SETTINGS[config_key]
     self.params = params
     self.paired_assay = paired_assay
+    self._version = None
     self._file_ids = None
     self._new_file_ids = None
     self._metadata = None
@@ -110,21 +109,55 @@ class Downloader(object):
     self._metadatabase = None
 
     self.mg = mygene.MyGeneInfo()
-    self.mg.set_caching(cache_db = self.conf["mygene_dir"])
+    self.mg.set_caching(cache_db = path.join(self.conf["mygene_dir"], "mygene.sqlite"))
+
+
+#  @property
+#  def version(self):
+#    """
+#    Summary:
+#      The version of the GDC data.  Keep track of this will allow us to
+#        download less data from GDC, as we can use the locally downloaded
+#        metadatabase if our version is up to date
+#    """
+#    status_filepath = path.join(self.conf["data_dir"], "gdc_version")
+#    with open(status_filepath) as f:
+#      statusnow = json.loads(f.read())
+#
+#    if self._version is None:
+#      # TODO: Add an 'expiration date' to only check the status every so often,
+#      #       rather than every single time a Download object is instantiated.
+#      with requests.get(f"{self.gdc_api_url}/status") as r:
+#        statustxt = r.content.decode("utf-8")
+#        status = json.loads(statustxt)
+#        with open(status_filepath) as f:
+#          f.write(statustxt)
+#      self._version = version
+#
+#      # TODO: Figure out how to use the json filtration parameters to query
+#      #       locally stored metadatabase, rather than querying gdc every time.
+#    return self._version
 
 
   @property
   def file_ids(self):
     """
     Summary:
-      The file_ids to be downloaded from GDC
+      The file_ids associated with the dataset.
+        This includes both the file_ids that will be downloaded (new_file_ids),
+        as well as file_ids that are already locally stored (owned_file_ids)
     """
     if self._file_ids is None:
       self._file_ids = self._get_file_ids()
     return self._file_ids
 
+
   @property
   def owned_file_ids(self):
+    """
+    Summary:
+      The file_ids already downloaded from GDC and available locally
+    """
     if self._owned_file_ids is None:
       self._owned_file_ids = self.metadatabase[self.metadatabase.downloaded]
     return self._owned_file_ids
@@ -226,9 +259,11 @@ class Downloader(object):
       # Now download clinical and demographic metadata for each file
       LOG.info("Downloading metadata for all files in the GDC...")
 
+      sample_metadata_frames = []
       # This must be done in chunks (server errors arise if larger sizes used)
-      chunk_size = 100000
-      for pos in tqdm(range(0, len(metadatabase), chunk_size)):
+      chunk_size = 10000
+      total = metadatabase[metadatabase.category == "data_file"].shape[0]
+      for pos in tqdm(range(0, total, chunk_size)):
 
         # Payload for query
         #   json is used instead of tsv, because there are some files that
@@ -240,14 +275,18 @@ class Downloader(object):
                                 "size": str(chunk_size),
                                 "from": str(pos)}
         to = pos+chunk_size
-        fp = path.join(self.conf["data_dir"], f"metadata{pos}-{to}.json")
-        download_url(f"{self.api_url}/files", fp, full_metadata_params)
+        fp = path.join(self.conf["data_dir"], "metadata", f"metadata{pos}-{to}.json")
+#        download_url(f"{self.api_url}/files", fp, full_metadata_params)
 
         metadatachunk = self._metadata_json_to_tsv(fp, nan_threshold = nan_threshold)
-        metadatabase.join(metadatachunk)
+        sample_metadata_frames += [metadatachunk]
+
+      sample_metadata_frames = pd.concat(sample_metadata_frames)
+      print(sample_metadata_frames)
+      metadatabase = metadatabase.join(sample_metadata_frames)
 
       # Include tracker of what is downloaded and not
-      self.metadatabase["downloaded"] = False
+      metadatabase["downloaded"] = False
       metadatabase.to_csv(self.conf["metadatabase_path"],
                           sep = '\t',
                           compression = "gzip")
@@ -260,6 +299,7 @@ class Downloader(object):
     Summary:
       Converting the full GDC metadata from json format to a Dataframe
     """
+    LOG.info(f"Converting json to tsv for dataframe storage...")
     # First, convert the json to a dataframe
     with open(json_filepath) as f:
       # The field "data.hits" is of most interest
@@ -271,6 +311,7 @@ class Downloader(object):
     df = column_expand(df, "project")
     df = column_expand(df, "diagnoses")
     df = column_expand(df, "follow_ups")
+    df = column_expand(df, "analysis")
     df = column_expand(df, "samples")
     df = column_expand(df, "portions")
     df = column_expand(df, "analytes")
@@ -287,8 +328,8 @@ class Downloader(object):
 
     # Drop columns containing NaN data
     #   that is more than the provided threshold (defaults to 100%)
-    num_nan_thresh = nan_threshold * len(df)
-    df = df.dropna(axis = 1, thresh = num_nan_thresh)
+#    num_nan_thresh = nan_threshold * len(df)
+#    df = df.dropna(axis = 1, thresh = num_nan_thresh)
 
     # Age is in days - change it to years
     if "age_at_diagnosis" in df.columns:
@@ -297,7 +338,7 @@ class Downloader(object):
     # The file UUID as index is necessary to join with metadatabase
     df = df.set_index("id")
 
-    LOG.info(f"Downloaded df database of {df.shape[0]} files.")
+    LOG.info(f"Converted json database to tsv for of {df.shape[0]} files.")
     return df
 
 

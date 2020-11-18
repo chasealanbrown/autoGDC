@@ -32,7 +32,10 @@ class Archive(Collator):
     self.conf = SETTINGS[config_key]
 
     # Initialize main directories
-    os.makedirs(self.conf["data_dir"], exist_ok = True)
+    os.makedirs(self.conf["data_dir"],
+                exist_ok = True)
+    os.makedirs(path.join(self.conf["data_dir"], "metadata"),
+                exist_ok = True)
     # Directory for each biological assay
     for assay, assay_dir in self.conf["assay_dirs"].items():
       os.makedirs(assay_dir, exist_ok = True)
