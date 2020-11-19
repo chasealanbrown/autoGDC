@@ -1,3 +1,4 @@
+import re
 import json
 #import logging
 import requests
@@ -43,12 +44,13 @@ def download_post(url: str, data: dict, headers: dict):
     Download data using POST on a REST API with a progress bar.
   """
   LOG.info(f"Downloading {data} from {url} ...")
-  with requests.post(data_endpt, data = json.dumps(data), headers = headers) as r:
-    r_head_cd = r.headers["Content-Disposition"]
+  with requests.post(url, data = json.dumps(data), headers = headers) as r:
+    r_head_cd = r.headers.get("Content-Disposition")
     file_name = re.findall("filename=(.+)", r_head_cd)[0]
 
-  with open(file_name, "wb") as output_file:
-    output_file.write(response.content)
+    with open(file_name, "wb") as output_file:
+      output_file.write(r.content)
+  return True
 
 
 
@@ -101,17 +103,19 @@ class Downloader(object):
     self.conf = SETTINGS[config_key]
     self.params = params
     self.paired_assay = paired_assay
-    self._version = None
+#    self._version = None
     self._file_ids = None
+    self._owned_file_ids = None
     self._new_file_ids = None
     self._metadata = None
     self._manifest = None
     self._metadatabase = None
 
     self.mg = mygene.MyGeneInfo()
-    self.mg.set_caching(cache_db = path.join(self.conf["mygene_dir"], "mygene.sqlite"))
+    self.mg.set_caching(cache_db = path.join(self.conf["mygene_dir"], "mygene"))
 
 
+# Need to have gdc_version and archive_version (local) to compare
 #  @property
 #  def version(self):
 #    """
@@ -139,6 +143,18 @@ class Downloader(object):
 #    return self._version
 
 
+  # This should be a part of config? or GDC_config?
+  # Perhaps a GDCArchive class or something?
+  @property
+  def gdc_fields(self):
+    import requests
+
+    url = f"{self.api_url}/gql/_mapping"
+
+    with requests.get(f"{self.api_url}/gql/_mapping") as r:
+      df = pd.DataFrame(json.loads(r.content.decode("utf-8")))
+    return df
+
   @property
   def file_ids(self):
     """
@@ -159,7 +175,7 @@ class Downloader(object):
       The file_ids already downloaded from GDC and available locally
     """
     if self._owned_file_ids is None:
-      self._owned_file_ids = self.metadatabase[self.metadatabase.downloaded]
+      self._owned_file_ids = self.metadatabase[self.metadatabase.downloaded].index.tolist()
     return self._owned_file_ids
 
 
@@ -170,7 +186,12 @@ class Downloader(object):
       The file_ids to be downloaded from GDC
     """
     if self._new_file_ids is None:
-      self._new_file_ids = list(set(self.file_ids) - set(self.owned_file_ids))
+      # TODO: Add ability to use GDC_API.key
+
+      # Remove file_ids that are not open access
+      locked_ids = self.metadatabase[self.metadatabase.acl == "[b'open']"].index.tolist()
+      self._new_file_ids = list(set(self.file_ids) - set(self.owned_file_ids)
+                                - set(locked_ids))
     return self._new_file_ids
 
 
@@ -434,10 +455,13 @@ class Downloader(object):
     LOG.info("Downloading data... (This may hang and take a while!)")
 
     # Process the manifest in chunks for download
-    LOG.info(f"Starting download of {manifest.shape[0]} files")
-    download_post(url = f"{gdc_api_url}/data",
-                   data = {"ids": self.new_file_ids},
-                   headers = {"Content-Type": "application/json"})
+    LOG.info(f"Starting download of {self.manifest.shape[0]} files")
+
+    for position in tqdm(range(0, len(self.new_file_ids), chunk_size)):
+      chunk = self.new_file_ids[position: position + chunk_size]
+      download_post(url = f"{self.api_url}/data",
+                    data = {"ids": chunk},
+                    headers = {"Content-Type": "application/json"})
 
 #    for position in tqdm(range(0, len(self.manifest), chunk_size)):
 #      # Debugging

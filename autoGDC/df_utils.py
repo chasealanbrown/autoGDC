@@ -2,6 +2,7 @@ import os
 import time
 import numpy as np
 import pandas as pd
+from itertools import chain as iterchain
 
 from .config import LOG
 #from joblib import Memory
@@ -16,25 +17,53 @@ from .config import LOG
 
 
 def column_expand(df, col: str):
+  if df.index.names == [None]:
+    df.index.names = ["index"]
   try:
     firstelem = df[col].dropna().tolist()[0]
     if isinstance(firstelem, list):
-      #   *Almost all* of these rows have a list value, with
-      #   one value in the list.
-      # TODO: We make an assumption here that the other values are not
-      #       important.
-      non_singular = df[col].dropna().apply(len) > 1
-      non_singular_ix = non_singular[non_singular].index
-      if non_singular.sum() > 0:
-        print(f"WARNING\nThe following values were not only one element:")
-        print(df.loc[non_singular_ix])
+#      expanded_series = df[col].apply(pd.Series).stack().dropna()
+#      expanded_series.index.names = list(df.index.names) + [f"nested_{col}_index"]
+#      tmp_df = pd.DataFrame(expanded_series.tolist(),
+#                            index = expanded_series.index)
 
-      # Assuming only signular elements
-      tmp_df = pd.DataFrame([{} if type(_) is float else _[0] for _ in df[col]])
+      # This expands columns with lists as elements
+      expanded_df = df.explode(col)
+
+      # Since `.explode()` duplicates the index, and doesn't provide
+      #   a multi-index, we create one here
+      # Nest count is essentially how many items with in each list of each elem
+      nest_count = expanded_df.groupby(expanded_df.index.tolist())[col].count()
+
+      # We then create a new index, where the nested count is rolled out
+      #   and concatenated into one list
+      #   (i.e. a multiindex with a counter for duplicates)
+      muix_vals = np.array(list(iterchain(*map(range, nest_count.values))))
+      expanded_df[f"nested_{col}_index"] = muix_vals
+      expanded_df.set_index(f"nested_{col}_index", append = True, inplace = True)
+      return column_expand(expanded_df, col)
 
     if isinstance(firstelem, dict):
-      tmp_df = pd.DataFrame([{_:_} if type(_) is float else _ for _ in df[col]])
-    df = df.drop(col, axis = 1).join(tmp_df, rsuffix = f"_for_{col}")
+      nan_replaced_series = df[col].where(df[col].notna(), lambda x: [{}])
+      tmp_df = pd.DataFrame(nan_replaced_series.values.tolist(),
+                            index = nan_replaced_series.index)
+#      tmp_df = pd.DataFrame(df[col].values.tolist(), index=df.index)
+
+    else:
+      LOG.warn(f"The column {col} type is not yet supported")
+      return df
+
+#    df = df.join(tmp_df, rsuffix = f"_for_{col}", on = df.index.names).drop(col, axis = 1)
+#    df = tmp_df.join(df.drop(col, axis = 1),
+#                     lsuffix = f"_for_{col}",
+#                     on = df.index.names)
+
+    to_rename = set(df.columns).intersection(set(tmp_df.columns))
+    prefix = f"{col}_"
+    tmp_df.rename(columns = {c:f"{prefix}{c}" for c in tmp_df.columns if c in to_rename}, inplace = True)
+
+    df = pd.concat([df, tmp_df], axis = 1).drop(col, axis =1).set_index(df.index)
+
   except KeyError as e:
     LOG.warn(e)
     LOG.warn(f"DataFrame does not appear to have column: {col}")

@@ -3,6 +3,7 @@ import json
 #import logging
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 # Specific function imports
 from geode import chdir as characteristic_direction
