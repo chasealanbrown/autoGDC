@@ -1,8 +1,6 @@
 import re
 import json
-#import logging
 import requests
-import subprocess
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -151,7 +149,7 @@ class Downloader(object):
 
     url = f"{self.api_url}/gql/_mapping"
 
-    with requests.get(f"{self.api_url}/gql/_mapping") as r:
+    with requests.get(url) as r:
       df = pd.DataFrame(json.loads(r.content.decode("utf-8")))
     return df
 
@@ -264,67 +262,80 @@ class Downloader(object):
     # If we have already pulled the database, just open it
     #   otherwise download and store it
     if path.exists(self.conf["metadatabase_path"]):
-      return pd.read_csv(self.conf["metadatabase_path"],
+      possible_metadatabase = pd.read_csv(self.conf["metadatabase_path"],
                          sep = '\t',
                          compression = "gzip").set_index("id")
-    else:
-      # First we get the table provided by GDC
-      #   of filenames, UUIDs, md5sum, etc.
-      LOG.info("Downloading list of all files in the GDC...")
-      download_url(url = self.conf["gdc_filelist_url"],
-                   filepath = self.conf["metadatabase_path"])
-      metadatabase = pd.read_csv(self.conf["metadatabase_path"],
-                                 sep = '\t',
-                                 compression = "gzip").set_index("id")
 
-      # Now download clinical and demographic metadata for each file
-      LOG.info("Downloading metadata for all files in the GDC...")
+      # If the database for metadata has been properly constructed, it will
+      #   have the proper columns
+      if "cases" in possible_metadatabase.columns:
+        return possible_metadatabase
 
-      sample_metadata_frames = []
-      # This must be done in chunks (server errors arise if larger sizes used)
-      chunk_size = 10000
-      total = metadatabase[metadatabase.category == "data_file"].shape[0]
-      for pos in tqdm(range(0, total, chunk_size)):
 
-        # Payload for query
-        #   json is used instead of tsv, because there are some files that
-        #   end up with lists of values that cause huge sparse tables
-        #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
-        #   This is fixed after getting the json to put into a table.
-        full_metadata_params = {"format": "json",
-                                "fields": ",".join(self.conf["fields"]),
-                                "size": str(chunk_size),
-                                "from": str(pos)}
-        to = pos+chunk_size
-        fp = path.join(self.conf["data_dir"], "metadata", f"metadata{pos}-{to}.json")
+    # Otherwise, create the missing database
+
+    # First we get the table provided by GDC
+    #   of filenames, UUIDs, md5sum, etc.
+    LOG.info("Downloading list of all files in the GDC...")
+    download_url(url = self.conf["gdc_filelist_url"],
+                 filepath = self.conf["metadatabase_path"])
+    metadatabase = pd.read_csv(self.conf["metadatabase_path"],
+                               sep = '\t',
+                               compression = "gzip").set_index("id")
+
+    # Now download clinical and demographic metadata for each file
+    LOG.info("Downloading metadata for all files in the GDC...")
+
+    sample_metadata_frames = []
+    # This must be done in chunks (server errors arise if larger sizes used)
+    chunk_size = 10000
+    total = metadatabase[metadatabase.category == "data_file"].shape[0]
+    for pos in tqdm(range(0, total, chunk_size)):
+
+      # Payload for query
+      #   json is used instead of tsv, because there are some files that
+      #   end up with lists of values that cause huge sparse tables
+      #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
+      #   This is fixed after getting the json to put into a table.
+      full_metadata_params = {"format": "json",
+                              "fields": ",".join(self.conf["fields"]),
+                              "size": str(chunk_size),
+                              "from": str(pos)}
+      to = pos+chunk_size
+      fp = path.join(self.conf["data_dir"], "metadata", f"metadata{pos}-{to}.json")
 #        download_url(f"{self.api_url}/files", fp, full_metadata_params)
 
-        metadatachunk = self._metadata_json_to_tsv(fp, nan_threshold = nan_threshold)
-        sample_metadata_frames += [metadatachunk]
+      metadatachunk = self._metadata_json_to_df(fp, nan_threshold = nan_threshold)
+      sample_metadata_frames += [metadatachunk]
 
-      sample_metadata_frames = pd.concat(sample_metadata_frames)
-      print(sample_metadata_frames)
-      metadatabase = metadatabase.join(sample_metadata_frames)
+    sample_metadata_frames = pd.concat(sample_metadata_frames)
+    metadatabase = metadatabase.join(sample_metadata_frames, how="outer")
 
-      # Include tracker of what is downloaded and not
-      metadatabase["downloaded"] = False
-      metadatabase.to_csv(self.conf["metadatabase_path"],
-                          sep = '\t',
-                          compression = "gzip")
-      return metadatabase
+    # Include tracker of what is downloaded and not
+    metadatabase["downloaded"] = False
+    metadatabase.to_csv(self.conf["metadatabase_path"],
+                        sep = '\t',
+                        compression = "gzip")
+    return metadatabase
 
-  def _metadata_json_to_tsv(self,
-                            json_filepath: str,
-                            nan_threshold: float = 1.0) -> pd.DataFrame:
+  # TODO
+  #   This can be moved outside of the class, as it does not depend on the
+  #   class
+  def _metadata_json_to_df(self,
+                           json_filepath: str,
+                           nan_threshold: float = 1.0) -> pd.DataFrame:
     """
     Summary:
       Converting the full GDC metadata from json format to a Dataframe
     """
-    LOG.info(f"Converting json to tsv for dataframe storage...")
+    LOG.info("Converting json to tsv for dataframe storage...")
     # First, convert the json to a dataframe
     with open(json_filepath) as f:
       # The field "data.hits" is of most interest
       df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
+
+    # The file UUID as index is necessary to join with metadatabase
+    df = df.set_index("id")
 
 	# Expand all of the dictionaries and lists within each column
     df = column_expand(df, "cases")
@@ -337,6 +348,7 @@ class Downloader(object):
     df = column_expand(df, "portions")
     df = column_expand(df, "analytes")
     df = column_expand(df, "aliquots")
+    df = column_expand(df, "archive")
 
     # Convert strings denoting nulls into proper null values
 	#   TODO: This can likely be much faster with things like `.fillna()`
@@ -349,15 +361,12 @@ class Downloader(object):
 
     # Drop columns containing NaN data
     #   that is more than the provided threshold (defaults to 100%)
-#    num_nan_thresh = nan_threshold * len(df)
-#    df = df.dropna(axis = 1, thresh = num_nan_thresh)
+    num_nan_thresh = nan_threshold * len(df)
+    df = df.dropna(axis = 1, thresh = num_nan_thresh)
 
     # Age is in days - change it to years
     if "age_at_diagnosis" in df.columns:
       df["age"] = np.round(df["age_at_diagnosis"]/365, 2)
-
-    # The file UUID as index is necessary to join with metadatabase
-    df = df.set_index("id")
 
     LOG.info(f"Converted json database to tsv for of {df.shape[0]} files.")
     return df
@@ -388,7 +397,7 @@ class Downloader(object):
                 \n{response_df}""")
       file_ids = response_df["id"].tolist()
     except ValueError as e:
-      LOG.warn(f"It appears that there were no samples that fit the criteria.")
+      LOG.warn("It appears that there were no samples that fit the criteria.")
       LOG.exception(e)
       file_ids = []
     return file_ids

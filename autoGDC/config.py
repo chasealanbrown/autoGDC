@@ -4,7 +4,7 @@ import numpy as np
 from os import path, listdir
 
 # Logger for package
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 LOG = logging.getLogger("autoGDC")
 
 # Full list of all files in the GDC

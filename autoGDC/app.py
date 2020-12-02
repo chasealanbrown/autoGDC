@@ -1,7 +1,7 @@
+"""The main Dataset object to define a meta-analysis is in this file."""
+
 # General dependencies
 import json
-#import logging
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -10,13 +10,9 @@ from geode import chdir as characteristic_direction
 
 # Local module imports
 from .config import SETTINGS, LOG
-from .df_utils import *
 from .store import Archive
 #from .R import wrappers as r_wrappers
-
-# Logger for autoGDC
-#logging.getLogger().setLevel(logging.INFO)
-#LOG = logging.getLogger(__name__)
+from .df_utils import quantile_normalize, combined_region_collapsed_frame
 
 
 class Dataset:
@@ -90,7 +86,6 @@ class Dataset:
     ages = study.metadata["age"]
 
     differential_methylation = study.ddx()
-
   """
 
   def __init__(self,
@@ -174,7 +169,6 @@ class Dataset:
        #        - Creates/Adds to HDF5 databases
        self.archive._update()
 
-
     LOG.info("Querying databases for dataset frames...")
     for assay in tqdm(self.archive.databasefiles):
       LOG.info(f"Querying {assay}...")
@@ -184,13 +178,13 @@ class Dataset:
       #           parameter to recalc with more data every so often?
       if self.quantile:
         LOG.info(f"Quantile normalization of {assay}...")
-        data[assay] = df_utils.quantile(data[assay])
+        data[assay] = quantile_normalize(data[assay])
 
     LOG.info("Constructing paired RNA and DNA methylation dataframe...")
     if self.paired_assay:
       data["RNA_DNAm"] = self._paired_rna_dnam_dataframe()
 
-    return data_dict
+    return data
 
 
   def _change_id_columns(self, data_df, meta_df, id_type = "case_id"):
@@ -283,7 +277,7 @@ class Dataset:
                                                pos_bounds = pos_bounds)
 
     dfs_dict = self.data["RNA_counts"]
-    df = df_utils.combined_region_collapsed_frame(dfs_dict = dfs_dict,
+    df = combined_region_collapsed_frame(dfs_dict = dfs_dict,
                                           main_seq_data = filt_methdf,
                                           seq_feature_metadata = filtered_loci,
                                           region = collapse_level,

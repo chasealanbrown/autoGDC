@@ -7,7 +7,6 @@ from .config import LOG
 
 
 def column_expand(df, col: str):
-  df = df.sort_index()
   try:
     colvals = df[col].dropna().tolist()
 
@@ -29,23 +28,28 @@ def column_expand(df, col: str):
     if isinstance(firstelem, list):
 
       # This expands columns with lists as elements
-      expand_df = df.explode(col).sort_index()
+      expand_df = df.explode(col)
+      print("Expanded df")
+      print(expand_df)
 
       # Since `.explode()` duplicates the index, and doesn't provide
       #   a multi-index, we create one here
       # Nest count is essentially how many items with in each list of each elem
-      nest_cnt = expand_df.groupby(level = expand_df.index.names)[col].count().sort_index()
+      nest_cnt = expand_df.groupby(level = expand_df.index.names)[col].count()
       assert len(nest_cnt) == len(df)
 
+      print("Nest count length")
+      print(len(nest_cnt))
       # Make sure that any NaN values are still counted such that the length of
       #   the dateframe will end up being the same size
       nest_cnt[nest_cnt == 0] = 1
-      assert nest_cnt.sum() == len(expand_df)
 
       # We then create a new index, where the nested count is rolled out
       #   and concatenated into one list
       #   (i.e. a multiindex with a counter for duplicates)
       muix_vals = np.array(list(iterchain(*map(range, nest_cnt.values))))
+      print("MUIX LENGTH", len(muix_vals))
+      print("expand_df len", len(expand_df))
       expand_df[f"nested_{col}_index"] = muix_vals
       expand_df.set_index(f"nested_{col}_index", append = True, inplace = True)
 
