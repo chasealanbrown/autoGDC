@@ -1,11 +1,14 @@
+"""
+Module for downloading GDC data
+"""
 import re
+from os import path
+from io import StringIO
 import json
 import requests
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from os import path
-from io import StringIO
 
 # Gene information
 import mygene
@@ -23,6 +26,18 @@ def download_url(url, filepath, params = None):
     https://stackoverflow.com/questions/56795227/how-do-i-make-progress-bar-while-downloading-file-in-python#56796119
   """
   LOG.info(f"Downloading {filepath} from {url} ...")
+  # TODO:
+  #   If the url points to a directory, this may need to be handled
+  #     by a different function to get all of the files.
+  #     However - here - we *assume* that if `filepath` is a directory,
+  #     then this is simply the location to store the data,
+  #     and we use the filename from the url to save it.
+  if os.path.isdir(filepath):
+    file_dir = filepath
+    parsed = urlparse(url)
+    filename = path.basename(parsed.path)
+    filepath = path.join(file_dir, filename)
+
   with requests.get(url, stream=True, params = params) as r:
     r.raise_for_status()
     with open(filepath, 'wb') as f:
@@ -33,7 +48,7 @@ def download_url(url, filepath, params = None):
         if chunk:  # filter out keep-alive new chunks
           f.write(chunk)
           pbar.update(len(chunk))
-  return
+  return filepath
 
 
 def download_post(url: str, data: dict, headers: dict):
@@ -108,6 +123,7 @@ class Downloader(object):
     self._metadata = None
     self._manifest = None
     self._metadatabase = None
+    self._metadatabase_index = None
 
     self.mg = mygene.MyGeneInfo()
     self.mg.set_caching(cache_db = path.join(self.conf["mygene_dir"], "mygene"))
@@ -253,23 +269,42 @@ class Downloader(object):
     return self._metadatabase
 
 
-  def _get_full_metadatabase(self,
-                             nan_threshold: float = 1.0) -> pd.DataFrame:
+  @property
+  def metadatabase_index(self):
+    """
+    Summary:
+      The index table for the GDC metadata.
+      New versions are released every so often.
+    """
+    if self._metadatabase_index is None:
+      self._metadatabase_index = self._get_metadatabase_index()
+    return self._metadatabase_index
+
+
+  def _get_metadatabase_index(self) -> pd.DataFrame:
     """
     Summary:
       The full table of all GDC metadata.
     """
     # If we have already pulled the database, just open it
     #   otherwise download and store it
-    if path.exists(self.conf["metadatabase_path"]):
-      possible_metadatabase = pd.read_csv(self.conf["metadatabase_path"],
-                         sep = '\t',
-                         compression = "gzip").set_index("id")
+    if path.exists(self.conf["metadatabase_index_path"]):
+      try:
+        # TODO:
+        #   The real solution to this is to have a whole module that can track
+        #     the versioning of GDC and match this important index file with
+        #     the main GDC database.
+        metadatabase_index = pd.read_csv(self.conf["metadatabase_index_path"],
+                                            sep = '\t',
+                                            compression = "gzip")\
+                                        .set_index("id")
 
-      # If the database for metadata has been properly constructed, it will
-      #   have the proper columns
-      if "cases" in possible_metadatabase.columns:
-        return possible_metadatabase
+        # If the database for metadata has been properly constructed, it will
+        #   have the proper columns
+        if "cases" in metadatabase_index.columns:
+          return metadatabase_index
+      except:
+        pass
 
 
     # Otherwise, create the missing database
@@ -302,10 +337,88 @@ class Downloader(object):
                               "size": str(chunk_size),
                               "from": str(pos)}
       to = pos+chunk_size
-      fp = path.join(self.conf["data_dir"], "metadata", f"metadata{pos}-{to}.json")
+      fp = path.join(self.conf["data_dir"],
+                     "metadata",
+                     f"metadata{pos}-{to}.json")
 #        download_url(f"{self.api_url}/files", fp, full_metadata_params)
 
-      metadatachunk = self._metadata_json_to_df(fp, nan_threshold = nan_threshold)
+      metadatachunk = self._metadata_json_to_df(fp,
+                                                nan_threshold = nan_threshold)
+      sample_metadata_frames += [metadatachunk]
+
+    sample_metadata_frames = pd.concat(sample_metadata_frames)
+    metadatabase = metadatabase.join(sample_metadata_frames, how="outer")
+
+    # Include tracker of what is downloaded and not
+    metadatabase["downloaded"] = False
+    metadatabase.to_csv(self.conf["metadatabase_path"],
+                        sep = '\t',
+                        compression = "gzip")
+    return metadatabase
+  def _get_full_metadatabase(self,
+                             nan_threshold: float = 1.0) -> pd.DataFrame:
+    """
+    Summary:
+      The full table of all GDC metadata.
+    """
+    # If we have already pulled the database, just open it
+    #   otherwise download and store it
+    if path.exists(self.conf["metadatabase_index_path"]):
+      try:
+        # TODO:
+        #   The real solution to this is to have a whole module that can track
+        #     the versioning of GDC and match this important index file with
+        #     the main GDC database.
+        metadatabase_index = pd.read_csv(self.conf["metadatabase_index_path"],
+                                            sep = '\t',
+                                            compression = "gzip")\
+                                        .set_index("id")
+
+        # If the database for metadata has been properly constructed, it will
+        #   have the proper columns
+        if "cases" in metadatabase_index.columns:
+          return metadatabase_index
+      except:
+        pass
+
+
+    # Otherwise, create the missing database
+
+    # First we get the table provided by GDC
+    #   of filenames, UUIDs, md5sum, etc.
+    LOG.info("Downloading list of all files in the GDC...")
+    download_url(url = self.conf["gdc_filelist_url"],
+                 filepath = self.conf["metadatabase_path"])
+    metadatabase = pd.read_csv(self.conf["metadatabase_path"],
+                               sep = '\t',
+                               compression = "gzip").set_index("id")
+
+    # Now download clinical and demographic metadata for each file
+    LOG.info("Downloading metadata for all files in the GDC...")
+
+    sample_metadata_frames = []
+    # This must be done in chunks (server errors arise if larger sizes used)
+    chunk_size = 10000
+    total = metadatabase[metadatabase.category == "data_file"].shape[0]
+    for pos in tqdm(range(0, total, chunk_size)):
+
+      # Payload for query
+      #   json is used instead of tsv, because there are some files that
+      #   end up with lists of values that cause huge sparse tables
+      #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
+      #   This is fixed after getting the json to put into a table.
+      full_metadata_params = {"format": "json",
+                              "fields": ",".join(self.conf["fields"]),
+                              "size": str(chunk_size),
+                              "from": str(pos)}
+      to = pos+chunk_size
+      fp = path.join(self.conf["data_dir"],
+                     "metadata",
+                     f"metadata{pos}-{to}.json")
+#        download_url(f"{self.api_url}/files", fp, full_metadata_params)
+
+      metadatachunk = self._metadata_json_to_df(fp,
+                                                nan_threshold = nan_threshold)
       sample_metadata_frames += [metadatachunk]
 
     sample_metadata_frames = pd.concat(sample_metadata_frames)
@@ -334,6 +447,8 @@ class Downloader(object):
       # The field "data.hits" is of most interest
       df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
 
+    LOG.debug("Converting {json_filepath}\
+              to dataframe - df prior to transforms: {df}")
     # The file UUID as index is necessary to join with metadatabase
     df = df.set_index("id")
 
