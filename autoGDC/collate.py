@@ -3,17 +3,18 @@ import os
 #import io
 #import gc
 #import json
-#import shutil
+import shutil
+import tarfile
 #import logging
 #import hashlib
 #import requests
 #import subprocess
 #import numpy as np
-#import pandas as pd
-#
+import pandas as pd
+
 ## Specific function imports
 from os import path
-#from tqdm import tqdm
+from tqdm import tqdm
 #from joblib import Memory
 #from geode import chdir as characteristic_direction
 
@@ -24,7 +25,6 @@ from .download import Downloader
 # Logger for collator
 #logging.getLogger().setLevel(logging.INFO)
 #LOG = logging.getLogger(__name__)
-
 
 
 class Collator(Downloader):
@@ -48,7 +48,7 @@ class Collator(Downloader):
         (indexed by assay type keys)
     """
     file_map = {assay: path.join(self.conf["data_dir"], f"{assay}.h5")
-                for assay in self.filetype_regexs}
+                for assay in self.conf["filetype_regexs"]}
     return file_map
 
 
@@ -60,22 +60,32 @@ class Collator(Downloader):
 
 
   def _update_databases(self, newdata: dict):
-    for assay_type, df in newdata:
+    if not path.isfile(self.conf["DNAm_450k_metadata_filepath"]):
+      feature_metadata = pd.read_csv(self.conf["DNAm_450k_metadata_filepath"], sep='\t')
+      # Metadata for features should be static
+      #   so this will only be stored once
+      # The mode is "w" for 'write' here, opposed to "a" (append)
+      #   becuase the "write" is applied file-wide. (i.e. rewrites the file)
+      #   However, "a" will also rewrite certain dataframes (overwrites keys)
+      feature_metadata.to_hdf(self.conf["DNAm_450k_metadata_filepath"],
+                              key = "feature_metadata",
+                              mode = "w",
+                              data_columns = True,
+                              format = "table")
+
+    if not path.isfile(self.conf["DNAm_27k_metadata_filepath"]):
+      feature_metadata = pd.read_csv(self.conf["DNAm_27k_metadata_filepath"], sep='\t')
+      feature_metadata.to_hdf(self.conf["DNAm_27k_metadata_filepath"],
+                              key = "feature_metadata",
+                              mode = "w",
+                              data_columns = True,
+                              format = "table")
+
+    for assay_type, df in newdata.items():
       db_path = self.database_files[assay_type]
 
       # If the file doesn't exist yet (first time run / initialization)
       if not path.isfile(db_path):
-        # Metadata for features should be static
-        #   so this will only be stored once
-        # The mode is "w" for 'write' here, opposed to "a" (append)
-        #   becuase the "write" is applied file-wide. (i.e. rewrites the file)
-        #   However, "a" will also rewrite certain dataframes (overwrites keys)
-        feature_metadata.to_hdf(db_path,
-                                key = "feature_metadata",
-                                mode = "w",
-                                data_columns = True,
-                                format = "table")
-
         append = False
         mode = "a"
 
@@ -94,7 +104,7 @@ class Collator(Downloader):
       df.to_hdf(db_path,
                 key = "data",
                 append = append,
-                mode = _mode,
+                mode = mode,
                 data_columns = True,
                 format = "table")
       sample_metadata.to_hdf(db_path,
@@ -134,6 +144,14 @@ class Collator(Downloader):
     for d in tqdm(os.listdir(newdatapath)):
       dpath = path.join(newdatapath, d)
 
+      if path.isfile(dpath) and path.endswith("tar.gz"):
+        with tarfile.open(dpath, "r:gz") as tar:
+          for member in tar.getmembers():
+            f = tar.extractfile(member)
+            if f is not None:
+              content = f.read()
+              member.name
+
       if not path.isfile(dpath):
 
         # For each of the files
@@ -144,40 +162,40 @@ class Collator(Downloader):
           # Just the bioassay files (not log directory files)
           if path.isfile(fpath):
 
-            # Find the assay type (in the filename)
-            #   make the new filename the file_id
-            #   and store the file in the assay directory
-            try:
-              assay_type = [assay_type for assay_type, regex
-                                       in self.conf["filetype_regexs"].items()
-                                       if regex.match(fname)][0]
-            except ValueError as e:
-              LOG.warn("""The regular expression for identifiying assay type
-                       from file names appears to have failed""")
-              LOG.exception(e)
-
-            # Get parameters used for reading data from config
-            readparams = self.conf["assaytype_readparams"][assay_type]
-            dtypes = readparams["dtypes"]
-            header = readparams["header"]
-            subset_cols = readparams["subset_cols"]
-            values_name = readparams["values_name"]
-            index_name = readparams["index_name"]
-
-            LOG.debug(f"Reading {fpath}")
-            try:
-              # Load data (without extra metadata) into memory
-              series = pd.read_csv(fpath,
-                                   sep = "\t",
-                                   index_col = 0,
-                                   header = header,
-                                   usecols = subset_cols,
-                                   dtype = dtypes,
-                                   engine = "c").iloc[:,0]
-
-              file_id = self.metadatabase[self.metadatabase.file_name == fname].index[0]
-              series.name = file_id
-              series.index.name = index_name
+#            # Find the assay type (in the filename)
+#            #   make the new filename the file_id
+#            #   and store the file in the assay directory
+#            try:
+#              assay_type = [assay_type for assay_type, regex
+#                                       in self.conf["filetype_regexs"].items()
+#                                       if regex.match(fname)][0]
+#            except ValueError as e:
+#              LOG.warn("""The regular expression for identifiying assay type
+#                       from file names appears to have failed""")
+#              LOG.exception(e)
+#
+#            # Get parameters used for reading data from config
+#            readparams = self.conf["assaytype_readparams"][assay_type]
+#            dtypes = readparams["dtypes"]
+#            header = readparams["header"]
+#            subset_cols = readparams["subset_cols"]
+#            values_name = readparams["values_name"]
+#            index_name = readparams["index_name"]
+#
+#            LOG.debug(f"Reading {fpath}")
+#            try:
+#              # Load data (without extra metadata) into memory
+#              series = pd.read_csv(fpath,
+#                                   sep = "\t",
+#                                   index_col = 0,
+#                                   header = header,
+#                                   usecols = subset_cols,
+#                                   dtype = dtypes,
+#                                   engine = "c").iloc[:,0]
+#
+#              file_id = self.metadatabase[self.metadatabase.file_name == fname].index[0]
+#              series.name = file_id
+#              series.index.name = index_name
 
 
               # Add series to dataframe dictionary of new data
@@ -201,4 +219,64 @@ class Collator(Downloader):
                 LOG.info(f"Error processing file: {fpath}")
 
     return newdata
+
+from os import path
+from io import StringIO
+
+config = SETTINGS[config_key]
+
+
+def read_series(fpath: str, file_content: str = None) -> pd.Series:
+  """
+  Read a series from a file or a tarfile compressed file (member)
+
+  Arguments:
+    fpath:
+      This filepath argument is actually a bit nefariously named
+      - it can either be a file path directly, or a path *within a tarfile.
+
+    file_content:
+      If the fpath is derived from a tar, then this will hold the content of
+      the file
+  """
+  if file_content is not None:
+    fpath = StringIO(file_content)
+    fname = fpath
+  else:
+    fname = path.basename(fpath)
+
+  # Find the assay type (in the filename)
+  #   make the new filename the file_id
+  #   and store the file in the assay directory
+  try:
+    assay_type = [assay_type for assay_type, regex
+                             in self.conf["filetype_regexs"].items()
+                             if regex.match(fname)][0]
+  except ValueError as e:
+    LOG.warn("""The regular expression for identifiying assay type
+             from file names appears to have failed""")
+    LOG.exception(e)
+
+  # Get parameters used for reading data from config
+  readparams = self.conf["assaytype_readparams"][assay_type]
+  dtypes = readparams["dtypes"]
+  header = readparams["header"]
+  subset_cols = readparams["subset_cols"]
+  values_name = readparams["values_name"]
+  index_name = readparams["index_name"]
+
+  LOG.debug(f"Reading {fpath}")
+  try:
+    # Load data (without extra metadata) into memory
+    series = pd.read_csv(fpath,
+                         sep = "\t",
+                         index_col = 0,
+                         header = header,
+                         usecols = subset_cols,
+                         dtype = dtypes,
+                         engine = "c").iloc[:,0]
+
+    file_id = self.metadatabase[self.metadatabase.file_name == fname].index[0]
+    series.name = file_id
+    series.index.name = index_name
 

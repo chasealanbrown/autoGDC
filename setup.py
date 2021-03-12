@@ -47,6 +47,8 @@ setup(
     install_requires=[
                       "pandas",
                       "rpy2",
-                      "mygene"
+                      "mygene",
+                      "requests_cache",
+                      "git+git://github.com/Maayanlab/geode.git"
                       ]
 )

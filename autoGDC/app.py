@@ -93,7 +93,7 @@ class Dataset:
                filt: dict = None,
                fields: list = None,
                size: int = 10,
-               contrasts: list = None,
+               contrasts: list = ["sample_type"],
                paired_assay: bool = False,
 			   quantile: bool = True):
 
@@ -295,7 +295,7 @@ class Dataset:
     if contrasts is None:
       contrasts = self.contrasts
     if formula is None:
-      formula = "~"+"+".join(self.contrasts)
+      formula = "~"+"+".join(contrasts)
 
     df = self.data["RNA_counts"].astype(int)
     design = self.metadata[contrasts].reindex(df.columns).reset_index()

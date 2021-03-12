@@ -3,6 +3,7 @@
 *.pkl
 *.egg-info
 .ipynb-checkpoints
+*/.ipynb_checkpoints/*
 .ropeproject
 .mypy_cache
 __pycache__

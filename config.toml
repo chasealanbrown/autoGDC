@@ -1,0 +1,25 @@
+###############################################################################
+# These values keep track of your local computer configuration
+#   i.e. if you want to store the downloaded data at another location on disk,
+#   you can add your own configuration key here
+#   (shown here as 'default' or 'wrenlab')
+#   This will likely only be changed once, during initial setup
+#   In order to use your configuration key, set the `config_key` parameter
+#   in the DataSet object
+#   (More GDC settings are located in autoGDC/settings.toml)
+###############################################################################
+
+# The value for `data_dir` can be set to any directory of the user's choice.
+[default]
+  # The default value here ("") will be set in the program to:
+  #   Windows: C:\Users\$USERNAME\.autogdc\data
+  #   MAC OS: ~/.autogdc/data
+  #   Linux: ~/.autogdc/data
+  data_dir = ""
+  # Whether or not to keep raw downloaded files in archive
+  keep_raw = False
+
+# For use by lab members of Dr. Wren's lab at OMRF
+[wrenlab]
+  data_dir = "/data/autogdc/data"
+  keep_raw = True

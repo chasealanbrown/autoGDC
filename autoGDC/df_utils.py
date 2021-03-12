@@ -1,9 +1,95 @@
-import time
-import numpy as np
-import pandas as pd
-from itertools import chain as iterchain
 
-from .config import LOG
+
+def metadata_json_to_df(json_filepath: str,
+                        null_type_strings: list = ["N/A"])-> pd.DataFrame:
+  """
+  Summary:
+    Converting the full GDC metadata from json format to a Dataframe
+
+  Notes:
+    The typical JSON structure returned by GDC
+      (considering only nested data structures)
+
+      data:
+        -cases
+          - samples
+            - portions
+              - analytes
+                - aliquots
+          - follow_ups
+          - demographic
+          - diagnosis
+        -analysis
+  """
+  # First, convert the json to a dataframe
+  with open(json_filepath) as f:
+    # The field "data.hits" is of most interest
+    df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
+
+  LOG.debug("Converting {json_filepath}\
+            to dataframe - df prior to transforms:\n {df}")
+
+  # Expand all of the dictionaries and lists within each column
+  #   Neseted structure shown by indentation
+  expand_order = [
+          "cases",
+            "samples",
+              "portions",
+                "analytes",
+                  "aliquots",
+            "follow_ups",
+            "demographic",
+            "diagnoses",
+          "analysis",
+          "archive", # ?
+          "project", # ?
+          ]
+  # First set file UUID (`id`) to index, as the `column_expand()` will
+  #   add more inidces as the lists and dictionaries in each cell are expanded
+  df = df.set_index("id")
+  for nested_col in expand_order:
+    df = column_expand(df, nested_col)
+
+  # Make sure index is the same every time
+  #   this function is run on a JSON from GDC's REST API
+  #   (fill missing indices with zeros)
+  index_columns = [
+          "id",
+          "nested_cases_index",
+            "nested_samples_index",
+              "nested_portions_index",
+                "nested_analytes_index",
+                  "nested_aliquots_index",
+            "nested_follow_ups_index",
+            "nested_diagnoses_index",
+          ]
+  # Use the index of `df` to check what is missing
+  missing_index_cols = set(index_columns).difference(set(df.index.names))
+  # Now reset in order to add back in the missing columns
+  df = df.reset_index()
+  for missing_col in list(missing_index_cols):
+    df[missing_col] = 0
+
+  # Now we set the index again, with more certainty that it is correct
+  #   (The file UUID and these nested indices are necessary
+  #    to join with metadata database)
+  df = df.set_index(index_columns)
+
+  # Convert strings denoting nulls into proper null values
+  re_match_fullstr = [f"^{str(s).lower()}$" for s in null_type_strings]
+  replacements = {'|'.join(re_match_fullstr): None}
+  df = df.replace(replacements, regex=True)
+
+  # Drop columns containing NaN data
+  #   (Only those which have absolutely no data)
+  df = df.dropna(axis = 1, how = "all")
+
+  # Age is in days - change it to years
+  if "age_at_diagnosis" in df.columns:
+    df["age"] = np.round(df["age_at_diagnosis"]/365, 2)
+
+  LOG.debug(f"Converted json file to dataframe with {df.shape[0]} rows.")
+  return df
 
 
 def column_expand(df, col: str):
@@ -144,27 +230,27 @@ def column_expand(df, col: str):
 
 def contains_all_substrings(main_list, substr_list):
   """
-  Summary:
-    Determine if all substrings within a list of substrings are represented
+  summary:
+    determine if all substrings within a list of substrings are represented
       within a large list of strings
 
-  Arguments:
+  arguments:
     main_list:
-      List of strings that will be tested to ensure that all substrings are
+      list of strings that will be tested to ensure that all substrings are
         represented within this list.
 
     substr_list:
-      List of substrings that need to be represented to return `True`
+      list of substrings that need to be represented to return `true`
 
-  Example:
-    substr_list = ["RNA", "DNA_methylation"]
-    main_list = ["file_1_RNA", "file_1_DNA_methylation", "file_1_RNA_2"]
+  example:
+    substr_list = ["rna", "dna_methylation"]
+    main_list = ["file_1_rna", "file_1_dna_methylation", "file_1_rna_2"]
     constains_all_substrings(main_list, substr_list)
-    # >>> True
+    # >>> true
 
-    main_list = ["file_1_RNA", "file_1_RNA_2"]
+    main_list = ["file_1_rna", "file_1_rna_2"]
     contains_all_substrings(main_list, substr_list)
-    # >>> False
+    # >>> false
   """
   return all(True if any((substr in fullstr for fullstr in main_list))
              else False

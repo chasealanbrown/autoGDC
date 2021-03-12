@@ -6,17 +6,27 @@ from os import path
 from io import StringIO
 import json
 import requests
+import requests_cache
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+from urllib.parse import urlparse
 
 # Gene information
 import mygene
 
 # Local modules
 from .config import SETTINGS, LOG
-from .df_utils import column_expand, subset_paired_assay
+from .df_utils import column_expand, subset_paired_assay, metadata_json_to_df
 
+import logging
+LOG.setLevel(logging.DEBUG)
+
+# Feature metadata urls for methylation
+drpbx = "https://www.dropbox.com/s/"
+_end_url = "_feature_metadata.tsv?dl=1"
+DNAm_27k_url = f"{drpbx}o36utk95fl1euy1/HumanMethylation27{_end_url}"
+DNAm_450k_url = f"{drpbx}wyck0lsa6941utw/HumanMethylation450{_end_url}"
 
 def download_url(url, filepath, params = None):
   """
@@ -25,17 +35,17 @@ def download_url(url, filepath, params = None):
   Source:
     https://stackoverflow.com/questions/56795227/how-do-i-make-progress-bar-while-downloading-file-in-python#56796119
   """
-  LOG.info(f"Downloading {filepath} from {url} ...")
+  parsed = urlparse(url)
+  filename = path.basename(parsed.path)
+  LOG.debug(f"Downloading {filepath} from {url} ...")
   # TODO:
   #   If the url points to a directory, this may need to be handled
   #     by a different function to get all of the files.
   #     However - here - we *assume* that if `filepath` is a directory,
   #     then this is simply the location to store the data,
   #     and we use the filename from the url to save it.
-  if os.path.isdir(filepath):
+  if path.isdir(filepath):
     file_dir = filepath
-    parsed = urlparse(url)
-    filename = path.basename(parsed.path)
     filepath = path.join(file_dir, filename)
 
   with requests.get(url, stream=True, params = params) as r:
@@ -43,7 +53,8 @@ def download_url(url, filepath, params = None):
     with open(filepath, 'wb') as f:
       datasize = r.headers.get("Content-Length")
       datasize = r.headers.get("content-length") if datasize is None else datasize
-      pbar = tqdm(total = None if datasize is None else int(datasize))
+      pbar = tqdm(total = None if datasize is None else int(datasize),
+                  desc = f"Downloading {filename}...")
       for chunk in r.iter_content(chunk_size = 8192):
         if chunk:  # filter out keep-alive new chunks
           f.write(chunk)
@@ -51,18 +62,24 @@ def download_url(url, filepath, params = None):
   return filepath
 
 
-def download_post(url: str, data: dict, headers: dict):
+def download_post(url: str, data: dict, headers: dict, download_dir: str = "data/"):
   """
   Summary:
     Download data using POST on a REST API with a progress bar.
   """
   LOG.info(f"Downloading {data} from {url} ...")
-  with requests.post(url, data = json.dumps(data), headers = headers) as r:
-    r_head_cd = r.headers.get("Content-Disposition")
-    file_name = re.findall("filename=(.+)", r_head_cd)[0]
+  try:
+    with requests.post(url, data = json.dumps(data), headers = headers) as r:
+      r_head_cd = r.headers.get("Content-Disposition")
+      r_head_cd = r.headers.get("content-disposition") if r_head_cd is None else r_head_cd
+      file_name = re.findall(r"filename=(.+)", r_head_cd)[0]
 
-    with open(file_name, "wb") as output_file:
-      output_file.write(r.content)
+      fp = path.join(download_dir, file_name)
+      with open(fp, "wb") as output_file:
+        output_file.write(r.content)
+  except Exception as e:
+    LOG.error(f"Critical Error when downloading {data} from {url}")
+    LOG.error(e)
   return True
 
 
@@ -103,9 +120,11 @@ class Downloader(object):
 
   # The GDC api url is used to obtain data via the REST API
   #   Useful urls are:
-  #     {gdc_api_url}/cases
-  #     {gdc_api_url}/data
-  #     {gdc_api_url}/files
+  #     {api_url}/cases
+  #     {api_url}/data
+  #     {api_url}/files
+  #     {api_url}/status
+  #     {api_url}/gql/_mapping
   api_url = "https://api.gdc.cancer.gov"
 
   def __init__(self,
@@ -114,9 +133,17 @@ class Downloader(object):
                paired_assay: bool = False):
 
     self.conf = SETTINGS[config_key]
+    self.status_filepath = path.join(self.conf["data_dir"], "gdc_status")
+    requests_cache.install_cache(path.join(self.conf["newdata_dir"], "autoGDC_dl"),
+                             backend='sqlite',
+                             expire_after=60*60*24*7) # A week in seconds
+
     self.params = params
     self.paired_assay = paired_assay
-#    self._version = None
+    self.updated_index = False
+    self._gdc_filelist_url = None
+    self._gdc_status = None
+    self._gdc_fields = None
     self._file_ids = None
     self._owned_file_ids = None
     self._new_file_ids = None
@@ -126,48 +153,79 @@ class Downloader(object):
     self._metadatabase_index = None
 
     self.mg = mygene.MyGeneInfo()
-    self.mg.set_caching(cache_db = path.join(self.conf["mygene_dir"], "mygene"))
+    self.mg.set_caching(cache_db = path.join(self.conf["mygene_dir"], "mygene"),
+                        verbose = False)
+    self.mg.delay = 0
+
+  @property
+  def gdc_status(self):
+    """
+    Summary:
+      The status of the remote GDC data.
+        Keeping track of this will allow us to download less data from GDC,
+        as we can check the local metadatabase if our version is up to date
+    """
+    if self._gdc_status is None:
+      # TODO: Add an 'expiration date' to only check the status every so often,
+      #       rather than every single time a Download object is instantiated.
+      with requests.get(f"{self.api_url}/status") as r:
+        status = r.json()
+      self._gdc_status = status
+    return self._gdc_status
 
 
-# Need to have gdc_version and archive_version (local) to compare
-#  @property
-#  def version(self):
-#    """
-#    Summary:
-#      The version of the GDC data.  Keep track of this will allow us to
-#        download less data from GDC, as we can use the locally downloaded
-#        metadatabase if our version is up to date
-#    """
-#    status_filepath = path.join(self.conf["data_dir"], "gdc_version")
-#    with open(status_filepath) as f:
-#      statusnow = json.loads(f.read())
-#
-#    if self._version is None:
-#      # TODO: Add an 'expiration date' to only check the status every so often,
-#      #       rather than every single time a Download object is instantiated.
-#      with requests.get(f"{self.gdc_api_url}/status") as r:
-#        statustxt = r.content.decode("utf-8")
-#        status = json.loads(statustxt)
-#        with open(status_filepath) as f:
-#          f.write(statustxt)
-#      self._version = version
-#
-#      # TODO: Figure out how to use the json filtration parameters to query
-#      #       locally stored metadatabase, rather than querying gdc every time.
-#    return self._version
+  @property
+  def local_status(self):
+    """The status of the local GDC data."""
+    try:
+      with open(self.status_filepath) as f:
+        status = json.loads(f.read())
+    except FileNotFoundError:
+      # The reason that this file does not exist, is likely because
+      #   the project is just being initiated - therefore
+      #   the solution is likely to download the master index table from GDC
+      # However, we should not begin that process here, as it would cause an
+      #   infinite loop - when retrieving the master index file,
+      #   this property (`local_status`) is used
+      # So instead we just give None
+      return None
+    return status
+
+
+  @property
+  def gdc_filelist_url(self):
+    """
+    Summary:
+      The url for GDC's master list of all available files.
+        The table contains mostly just index info, such as:
+        Filenames, UUIDs, md5sum, etc.
+    """
+    if self._gdc_filelist_url is None:
+      _base_url = "https://docs.gdc.cancer.gov/Data/Release_Notes/Data_Release_Notes/"
+      # The first table (index 0 in this list) from the url above
+      #   gives the gdc version releases info
+      release_tbl = pd.read_html(_base_url)[0]
+      # The lastest info is on top
+      newest = release_tbl.iloc[0]
+      # remove 'v' (given as e.g. 'v27.0')
+      _version = newest.Version.strip("v")
+      _date = pd.to_datetime(newest_info.Date).strftime("%Y%m%d")
+      _file_str = f"gdc_manifest_{_date}_data_release_{_version}_active.tsv.gz"
+      self._gdc_filelist_url = f"{_base_url}{_file_str}"
+    return self._gdc_filelist_url
 
 
   # This should be a part of config? or GDC_config?
   # Perhaps a GDCArchive class or something?
   @property
   def gdc_fields(self):
-    import requests
+    if self._gdc_fields is None:
+      url = f"{self.api_url}/gql/_mapping"
+      with requests.get(url) as r:
+        df = pd.DataFrame(json.loads(r.content.decode("utf-8")))
+      self._gdc_fields = df
+    return self._gdc_fields
 
-    url = f"{self.api_url}/gql/_mapping"
-
-    with requests.get(url) as r:
-      df = pd.DataFrame(json.loads(r.content.decode("utf-8")))
-    return df
 
   @property
   def file_ids(self):
@@ -203,9 +261,18 @@ class Downloader(object):
       # TODO: Add ability to use GDC_API.key
 
       # Remove file_ids that are not open access
-      locked_ids = self.metadatabase[self.metadatabase.acl == "[b'open']"].index.tolist()
-      self._new_file_ids = list(set(self.file_ids) - set(self.owned_file_ids)
-                                - set(locked_ids))
+      #   We may also use this if `acl` column: == "[b'open']"]
+      open_id_bool = self.metadatabase.acl.apply(lambda x: "open" in x)
+      locked_ids = self.metadatabase[~open_id_bool].index.tolist()
+
+      self._new_file_ids = list(set(self.file_ids) # File_ids in this study
+                                - set(self.owned_file_ids) # Already downloaded
+                                - set(locked_ids)) # Controlled access files
+
+      # TODO: Not sure what is happening here, but it seems that somtimes
+      #    ther is a NaN or None in this list.  So this is another band-aid
+      self._new_file_ids = [fid for fid in self._new_file_ids
+                            if type(fid) is str]
     return self._new_file_ids
 
 
@@ -216,7 +283,7 @@ class Downloader(object):
       The table of GDC metadata for this specific download
     """
     if self._metadata is None:
-      self._metadata = self.metadatabase.loc[self.file_ids]
+      self._metadata = self.metadatabase.query("id == @self.file_ids")#self.metadatabase.loc[self.file_ids]
       if self.paired_assay:
         # TODO: This needs to be fixed by placing it in params
         #       - if size is ~50, you won't get anything - becuase there aren't
@@ -284,207 +351,157 @@ class Downloader(object):
   def _get_metadatabase_index(self) -> pd.DataFrame:
     """
     Summary:
-      The full table of all GDC metadata.
+      A helper function to download the main index of files in GDC as a table.
     """
-    # If we have already pulled the database, just open it
-    #   otherwise download and store it
-    if path.exists(self.conf["metadatabase_index_path"]):
-      try:
-        # TODO:
-        #   The real solution to this is to have a whole module that can track
-        #     the versioning of GDC and match this important index file with
-        #     the main GDC database.
-        metadatabase_index = pd.read_csv(self.conf["metadatabase_index_path"],
-                                            sep = '\t',
-                                            compression = "gzip")\
-                                        .set_index("id")
 
-        # If the database for metadata has been properly constructed, it will
-        #   have the proper columns
-        if "cases" in metadatabase_index.columns:
-          return metadatabase_index
-      except:
-        pass
+    # TODO:
+    #   Check version of GDC database and compare it ours
+    outdated = self.local_status != self.gdc_status
+    if outdated:
+      LOG.info("Updating the index for all GDC files...")
+
+      # Table provided by GDC of filenames, UUIDs, md5sum, etc.
+      download_url(url = self.gdc_filelist_url,
+                   filepath = self.conf["metadatabase_index_path"])
+
+      # Update local status to the value of GDC status
+      # TODO:
+      #   This should only be run if we get confirmation of proper download
+      #   e.g. md5sum check?
+      with open(self.status_filepath, 'w') as f:
+        json.dump(self.gdc_status, f)
+
+      self.updated_index = True
+
+    metadatabase_ix = pd.read_csv(self.conf["metadatabase_index_path"],
+                                  sep = '\t',
+                                  compression = "gzip").set_index("id")
+    return metadatabase_ix
 
 
-    # Otherwise, create the missing database
+  def metadata_and_index_synced(self):
+    """Check to see if the indices are synced for the full metadatabase
+    and the metadata master index table"""
+    return self.metadatabase_index.index == self.metadtabase.index
 
-    # First we get the table provided by GDC
-    #   of filenames, UUIDs, md5sum, etc.
-    LOG.info("Downloading list of all files in the GDC...")
-    download_url(url = self.conf["gdc_filelist_url"],
-                 filepath = self.conf["metadatabase_path"])
-    metadatabase = pd.read_csv(self.conf["metadatabase_path"],
-                               sep = '\t',
-                               compression = "gzip").set_index("id")
 
-    # Now download clinical and demographic metadata for each file
-    LOG.info("Downloading metadata for all files in the GDC...")
-
-    sample_metadata_frames = []
-    # This must be done in chunks (server errors arise if larger sizes used)
-    chunk_size = 10000
-    total = metadatabase[metadatabase.category == "data_file"].shape[0]
-    for pos in tqdm(range(0, total, chunk_size)):
-
-      # Payload for query
-      #   json is used instead of tsv, because there are some files that
-      #   end up with lists of values that cause huge sparse tables
-      #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
-      #   This is fixed after getting the json to put into a table.
-      full_metadata_params = {"format": "json",
-                              "fields": ",".join(self.conf["fields"]),
-                              "size": str(chunk_size),
-                              "from": str(pos)}
-      to = pos+chunk_size
-      fp = path.join(self.conf["data_dir"],
-                     "metadata",
-                     f"metadata{pos}-{to}.json")
-#        download_url(f"{self.api_url}/files", fp, full_metadata_params)
-
-      metadatachunk = self._metadata_json_to_df(fp,
-                                                nan_threshold = nan_threshold)
-      sample_metadata_frames += [metadatachunk]
-
-    sample_metadata_frames = pd.concat(sample_metadata_frames)
-    metadatabase = metadatabase.join(sample_metadata_frames, how="outer")
-
-    # Include tracker of what is downloaded and not
-    metadatabase["downloaded"] = False
-    metadatabase.to_csv(self.conf["metadatabase_path"],
-                        sep = '\t',
-                        compression = "gzip")
-    return metadatabase
-  def _get_full_metadatabase(self,
-                             nan_threshold: float = 1.0) -> pd.DataFrame:
+  def _get_full_metadatabase(self) -> pd.DataFrame:
     """
     Summary:
       The full table of all GDC metadata.
     """
-    # If we have already pulled the database, just open it
-    #   otherwise download and store it
-    if path.exists(self.conf["metadatabase_index_path"]):
-      try:
-        # TODO:
-        #   The real solution to this is to have a whole module that can track
-        #     the versioning of GDC and match this important index file with
-        #     the main GDC database.
-        metadatabase_index = pd.read_csv(self.conf["metadatabase_index_path"],
-                                            sep = '\t',
-                                            compression = "gzip")\
-                                        .set_index("id")
-
-        # If the database for metadata has been properly constructed, it will
-        #   have the proper columns
-        if "cases" in metadatabase_index.columns:
-          return metadatabase_index
-      except:
-        pass
+    # TODO: Figure out how to use the json filtration parameters to query
+    #       locally stored metadatabase, rather than querying gdc every time.
 
 
-    # Otherwise, create the missing database
+    # If we just updated the master index file, or if the file doesn't exist,
+    #   then we need to create this full metadata database
+    index_missing = not path.exists(self.conf["metadatabase_index_path"])
+    metadb_missing = not path.exists(self.conf["metadatabase_path"])
+    if index_missing | metadb_missing | self.updated_index:
+      # Now download clinical and demographic metadata for each file
+      mdbix = self.metadatabase_index
 
-    # First we get the table provided by GDC
-    #   of filenames, UUIDs, md5sum, etc.
-    LOG.info("Downloading list of all files in the GDC...")
-    download_url(url = self.conf["gdc_filelist_url"],
-                 filepath = self.conf["metadatabase_path"])
-    metadatabase = pd.read_csv(self.conf["metadatabase_path"],
-                               sep = '\t',
-                               compression = "gzip").set_index("id")
+      sample_metadata_frames = []
+      # This must be done in chunks (server errors arise if larger sizes used)
+      chunk_size = 10000
+      total = mdbix[mdbix.category == "data_file"].shape[0]
+      for pos in tqdm(range(0, total, chunk_size), desc = "Updating metadata"):
 
-    # Now download clinical and demographic metadata for each file
-    LOG.info("Downloading metadata for all files in the GDC...")
+        # Payload for query
+        #   json is used instead of tsv, because there are some files that
+        #   end up with lists of values that cause huge sparse tables
+        #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
+        #   This is fixed after getting the json to put into a table.
+        full_metadata_params = {"format": "json",
+                                "fields": ",".join(self.conf["fields"]),
+                                "size": str(chunk_size),
+                                "from": str(pos)}
+        to = pos+chunk_size
+        fp = path.join(self.conf["data_dir"],
+                       "metadata",
+                       f"metadata{pos}-{to}.json")
+        download_url(f"{self.api_url}/files", fp, full_metadata_params)
 
-    sample_metadata_frames = []
-    # This must be done in chunks (server errors arise if larger sizes used)
-    chunk_size = 10000
-    total = metadatabase[metadatabase.category == "data_file"].shape[0]
-    for pos in tqdm(range(0, total, chunk_size)):
+        metadatachunk = metadata_json_to_df(fp,
+                           null_type_strings = self.conf["null_type_strings"])
+        sample_metadata_frames += [metadatachunk]
 
-      # Payload for query
-      #   json is used instead of tsv, because there are some files that
-      #   end up with lists of values that cause huge sparse tables
-      #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
-      #   This is fixed after getting the json to put into a table.
-      full_metadata_params = {"format": "json",
-                              "fields": ",".join(self.conf["fields"]),
-                              "size": str(chunk_size),
-                              "from": str(pos)}
-      to = pos+chunk_size
-      fp = path.join(self.conf["data_dir"],
-                     "metadata",
-                     f"metadata{pos}-{to}.json")
-#        download_url(f"{self.api_url}/files", fp, full_metadata_params)
+      LOG.info("Joining the metadata chunks together...")
+      sample_metadata_frames = pd.concat(sample_metadata_frames)
+      # This needs to be merge - it allows overlapping columns to 'merge' into
+      #   the same column without the need for suffixes and prefixes for
+      #   'right' or 'left' columns
+      #   The use of outer just allows the places where a perfect match in
+      #   mostly matching columns will just add NaNs to the additional columns
+      # TODO:
+      #   There is a problem even after using `merge` with having columns
+      #     such as `acl` (which should be exactly the same between the
+      #     metadata master index table and the metadata json information
+      #     retruned by GDC's REST API) having NaNs in (presumably) the json
+      #     information.
+      #   The quick fix for this is just to remove the overlapping columns from
+      #   the json information dataframes and assume the metadata master index
+      #   table is correct and not the json information from the REST API, but
+      #   this certainly needs a closer look.
+      ix_cols = set(mdbix.columns.tolist())
+      mdf_cols = set(sample_metadata_frames.columns.tolist())
+      overlap_cols = ix_cols.intersection(mdf_cols) - {"id"}
+      indices = ["id"] + [col for col in sample_metadata_frames
+                          if "nested" in col]
+      # The index for mdbix is already set to `id`
+      #    The `.reset_index()` is needed to use `.set_index()` later
+      #    and include `id`
+      metadatabase = mdbix.join(sample_metadata_frames.reset_index()\
+                                    .drop(overlap_cols, axis=1)\
+                                    .set_index(indices),
+                                 how="outer")
 
-      metadatachunk = self._metadata_json_to_df(fp,
-                                                nan_threshold = nan_threshold)
-      sample_metadata_frames += [metadatachunk]
+      # Include tracker of what is downloaded and not
+      # TODO:
+      #   This is clearly wrong - if we just update,, the data will still be
+      #   there ... but it could be re-indexed in a completely different way?
+      #   Probably should be handled by store.py somehow?
+      #   Redownloading data every time an update to status occurs is not ideal
+      metadatabase["downloaded"] = False
 
-    sample_metadata_frames = pd.concat(sample_metadata_frames)
-    metadatabase = metadatabase.join(sample_metadata_frames, how="outer")
+      # Correct `acl` Access Control List
+      metadatabase["acl"] = metadatabase.acl.apply(lambda x:
+                                                   set([i.decode("utf-8")
+                                                        for i in eval(x)]))
 
-    # Include tracker of what is downloaded and not
-    metadatabase["downloaded"] = False
-    metadatabase.to_csv(self.conf["metadatabase_path"],
-                        sep = '\t',
-                        compression = "gzip")
+      LOG.info("Saving the new metadata database...")
+      metadatabase.to_csv(self.conf["metadatabase_path"],
+                          sep = '\t',
+                          compression = "gzip")
+
+    # Otherwise, the file does exist, so we can just load it
+    try:
+      # TODO:
+      #   The real solution to this is to have a whole module that can track
+      #     the versioning of GDC and match this important index file with
+      #     the main GDC database.
+      LOG.info("Reading the metadata database...")
+      metadatabase = pd.read_csv(self.conf["metadatabase_path"],
+                                          sep = '\t',
+                                          compression = "gzip")
+
+      # Set indices to file UUID and enumeration of nested column vals
+      indices = ["id"] + [col for col in metadatabase.columns
+                          if "nested" in col]
+      metadatabase = metadatabase.set_index(indices)
+
+      LOG.debug("The metadata database is loaded:\n {metadatabase}")
+
+      # If the database for metadata has been properly constructed, it will
+      #   have the proper columns
+      assert "case_id" in metadatabase.columns
+
+    except:
+      LOG.warn("Major Error: Metadatabase is not found or is in wrong format.")
+      raise
+
     return metadatabase
-
-  # TODO
-  #   This can be moved outside of the class, as it does not depend on the
-  #   class
-  def _metadata_json_to_df(self,
-                           json_filepath: str,
-                           nan_threshold: float = 1.0) -> pd.DataFrame:
-    """
-    Summary:
-      Converting the full GDC metadata from json format to a Dataframe
-    """
-    LOG.info("Converting json to tsv for dataframe storage...")
-    # First, convert the json to a dataframe
-    with open(json_filepath) as f:
-      # The field "data.hits" is of most interest
-      df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
-
-    LOG.debug("Converting {json_filepath}\
-              to dataframe - df prior to transforms: {df}")
-    # The file UUID as index is necessary to join with metadatabase
-    df = df.set_index("id")
-
-	# Expand all of the dictionaries and lists within each column
-    df = column_expand(df, "cases")
-    df = column_expand(df, "demographic")
-    df = column_expand(df, "project")
-    df = column_expand(df, "diagnoses")
-    df = column_expand(df, "follow_ups")
-    df = column_expand(df, "analysis")
-    df = column_expand(df, "samples")
-    df = column_expand(df, "portions")
-    df = column_expand(df, "analytes")
-    df = column_expand(df, "aliquots")
-    df = column_expand(df, "archive")
-
-    # Convert strings denoting nulls into proper null values
-	#   TODO: This can likely be much faster with things like `.fillna()`
-    #         or at least not using `applymap()`
-    df = df.applymap(lambda x:
-                     # Perhaps this could be pd.NA?
-                     np.nan if any(s == str(x).lower()
-                                   for s in self.conf["null_type_strings"])
-                            else x)
-
-    # Drop columns containing NaN data
-    #   that is more than the provided threshold (defaults to 100%)
-    num_nan_thresh = nan_threshold * len(df)
-    df = df.dropna(axis = 1, thresh = num_nan_thresh)
-
-    # Age is in days - change it to years
-    if "age_at_diagnosis" in df.columns:
-      df["age"] = np.round(df["age_at_diagnosis"]/365, 2)
-
-    LOG.info(f"Converted json database to tsv for of {df.shape[0]} files.")
-    return df
 
 
   def _get_file_ids(self):
@@ -503,7 +520,7 @@ class Downloader(object):
     # TODO:
     #     This is a band-aid fix to problem small sizes on paired data
     if self.paired_assay:
-      params["size"] = "1000000"
+      params["size"] = f"{10**9}"
     response = requests.get(f"{self.api_url}/files", params = params)
     response_file = StringIO(response.content.decode("utf-8"))
     try:
@@ -525,9 +542,13 @@ class Downloader(object):
     """
     # Create *complete* manifest file for downloading the files
 #    boolmask = self.metadatabase.ids.isin(self.new_file_ids)
-    manifest = self.metadatabase.loc[self.new_file_ids][["file_name",
-                                                         "md5sum",
-                                                         "file_size"]]
+    ix = self.metadatabase.query("id == @self.new_file_ids").index
+    manifest = self.metadatabase.loc[ix][["file_name",
+                                          "md5sum",
+                                          "file_size"]]
+    #manifest = self.metadatabase.loc[self.new_file_ids][["file_name",
+    #                                                     "md5sum",
+    #                                                     "file_size"]]
     manifest["state"] = "validated"
     manifest.columns = ["filename", "md5", "size", "state"]
     return manifest
@@ -544,12 +565,14 @@ class Downloader(object):
     # Check if feature metadata exists for each assay
     for assay, assay_dir in self.conf["assay_dirs"].items():
       if "DNAm" in assay:
-        if assay == "DNAm_450k":
-          url = self.conf["DNAm_450k_url"]
+        if assay == "DNAm_450":
+          url = DNAm_450k_url
           metadata_path = self.conf["DNAm_450k_metadata_filepath"]
-        elif assay == "DNAm_27k":
-          url = self.conf["DNAm_27k_url"]
+        elif assay == "DNAm_27":
+          url = DNAm_27k_url
           metadata_path = self.conf["DNAm_27k_metadata_filepath"]
+        else:
+          LOG.error(f"Warning: Unforseen error - assay of {assay}")
 
         # If it isn't there, put it there
         #   (using a local git file now - need to use git LFS or ipfs)
@@ -583,9 +606,10 @@ class Downloader(object):
 
     for position in tqdm(range(0, len(self.new_file_ids), chunk_size)):
       chunk = self.new_file_ids[position: position + chunk_size]
-      download_post(url = f"{self.api_url}/data",
+      file_path = download_post(url = f"{self.api_url}/data",
                     data = {"ids": chunk},
-                    headers = {"Content-Type": "application/json"})
+                    headers = {"Content-Type": "application/json"},
+                                download_dir=self.conf["newdata_dir"])
 
 #    for position in tqdm(range(0, len(self.manifest), chunk_size)):
 #      # Debugging
@@ -608,7 +632,8 @@ class Downloader(object):
     LOG.info("All files have been downloaded.")
     self._download_feature_metadata()
 
-    self.metadatabase["downloaded"].loc[self.new_file_ids] = True
+    _ix = self.metadatabase.query("id == @self.new_file_ids").index
+    self.metadatabase["downloaded"].loc[_ix] = True
     self.metadatabase.to_csv(self.conf["metadatabase_path"],
                              sep = '\t',
                              compression = "gzip")

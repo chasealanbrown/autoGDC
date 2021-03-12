@@ -1,0 +1,89 @@
+###############################################################################
+# Settings for GDC
+#   Typically useful for devs - not be changed often (only specific cases)
+###############################################################################
+
+# This mapping defines how to determine
+#   which files from GDC belong to each assay type
+# NOTE: The keys here also define all of the assay types available in autoGDC
+[filetype_regex]
+  DNAm_450 = "HumanMethylation450"
+  DNAm_27 = "HumanMethylation27"
+  RNA_FPKM = "FPKM\.txt"
+  # Files can have either '-' or '.' in name
+  RNA_FPKM-UQ = "FPKM[\.\-]UQ"
+  RNA_counts = "htseq[\.\-]counts.gz"
+  RNA_miRNA = "mirnas[\.\-]quantification"
+  RNA_isoforms = "isoforms[\.\-]quantification"
+
+# These are the sample metadata features that we will pull
+#   from the GDC REST API for determining what data we have on disk,
+#   and for organizing the data
+fields = ["id",
+          "file_id",
+          "file_name",
+          "md5sum",
+          "file_size",
+          "data_type",
+          "data_category",
+          "access",
+          "submitter_id",
+          "primary_site",
+          "archive.state",
+          "cause_of_death",
+          "cause_of_death_source",
+          "files.data_category",
+          "analysis.workflow_type",
+          "cases.submitter_id",
+          "cases.case_id",
+          "cases.primary_site",
+          "cases.disease_type",
+          "cases.demographic.race",
+          "cases.demographic.gender",
+          "cases.diagnoses.tumor_stage",
+          "cases.diagnoses.age_at_diagnosis",
+          "cases.samples.tumor_descriptor",
+          "cases.samples.tissue_type",
+          "cases.samples.sample_type",
+          "cases.samples.sample_id",
+          "cases.samples.portions.analytes.aliquots.aliquot_id",
+          "cases.project.project_id"
+          "cases.follow_ups.comorbidity",
+          "cases.follow_ups.diabetes_treatment_type",
+          "cases.follow_ups.bmi",
+          "cases.follow_ups.risk_factor",
+          "cases.follow_ups.risk_factor_treatment",
+          "cases.follow_ups.cd4_count"
+          "diagnoses.vital_status"]
+
+# Several ways of reporting a none/null type in GDC exist in string form
+null_type_strings = ["not reported",
+                     "unknown",
+                     "--",
+                     "na",
+                     "n/a",
+                     "null",
+                     "none"]
+
+# DNA methylation feature dtypes
+#   (needed for faster parsing of files by Cython)
+meth_dtypes = {"Composite Element REF": str,
+               "Beta_value": float64,
+               "Chromosome": str,
+               "Start": int,
+               "End": int,
+               "Gene_Symbol": str,
+               "Gene_Type": str,
+               "Transcript_ID": str,
+               "Position_to_TSS": str,
+               "CGI_Coordinate": str,
+               "Feature_Type": str}
+
+# MircoRNA feature dtypes
+#   (needed for faster parsing of files by Cython)
+mirna_dtypes = {"miRNA_ID": str,
+                "isoform_coords": str,
+                "read_count": int,
+                "reads_per_million_miRNA_mapped": float64,
+                "cross-mapped": str,
+                "miRNA_region": str}

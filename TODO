@@ -1,0 +1,2 @@
+- Add local and GDC config yaml files
+- Make ths work by filtering the archive.metadatabase and using that as a study.metadata frame - right now everything is pulled from params, so this can't work

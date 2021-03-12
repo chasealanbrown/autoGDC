@@ -1,259 +1,94 @@
 import re
 import logging
-import numpy as np
-from os import path, listdir
+import toml
+from os import path
+from numpy import float64
 
 # Logger for package
 logging.getLogger().setLevel(logging.DEBUG)
 LOG = logging.getLogger("autoGDC")
 
-# Full list of all files in the GDC
-gdc_filelist_url = "https://docs.gdc.cancer.gov/Data/Release_Notes/gdc_manifest_20201109_data_release_27.0_active.tsv.gz"
+###############################################################################
+# Load the config and settings files (static/no-logic part of config)
+###############################################################################
 
-
-# Infinium feature metadata
-#DNAm_27k_url = "https://support.illumina.com/content/dam/illumina-support/documents/downloads/productfiles/humanmethylation27/productsupportfiles/illumina_humanmethylation27_content.xlsx"
-# Wrenlab feature metadata
-DNAm_27k_url = "https://www.dropbox.com/s/o36utk95fl1euy1/HumanMethylation27_feature_metadata.tsv?dl=0"
-#DNAm_450k_url = "ftp://webdata2:webdata2@ussd-ftp.illumina.com/downloads/ProductFiles/HumanMethylation450/HumanMethylation450_15017482_v1-2.csv"
-DNAm_450k_url = "https://www.dropbox.com/s/wyck0lsa6941utw/HumanMethylation450_feature_metadata.tsv?dl=0"
-
-# Absolute path for this directory
-this_dir = path.dirname(path.realpath(__file__))
-
-# Binary program released by GDC for downloading files
-gdc_client_path = path.join(this_dir, "..", "bin", "gdc-client")
-
-# Different system configurations for data directory locations
-default_data_dir = path.join(this_dir, "data", "archive")
-wrenlab_data_dir = path.join("data", "autogdc", "archive")
-
-# Different system configurations for Mygene information database
-default_mg_dir = path.join(this_dir, "data", "mygene")
-wrenlab_mg_dir = path.join("data", "databases", "mygene")
+# Load the local system settings for data paths
+with open(path.join("..", "config.toml")) as f:
+  conf = toml.loads(f.read())
+  # Check if the local data directory needs to be set to the default
+  if conf["default"]["data_dir"] == "":
+    conf["default"]["data_dir"] = path.join("~", ".autogdc", "data")
 
 # Load the GDC API key for access to controlled data
-with open(path.join(this_dir, "GDC_API.key")) as f:
-  s = f.read()
-  if s == "":
+with open(path.join("..", "GDC_API.key")) as f:
+  if f.read() == "":
     gdc_api_key = None
   else:
-    gdc_api_key = s
+    l = list(f.readlines())
+    if len(l)>1:
+      LOG.error("Ensure that the 'GDC_API.key' file\
+                has only one line of text")
+    gdc_api_key = l[0].strip()
+
+# Load other GDC settings
+# - This is typically configurable by devs
+with open("settings.toml") as f:
+  settings = toml.loads(f.read())
 
 ###############################################################################
-# These values can, and will be changed often (between each new study)
-#   Also:
-#     What is written here will only be used if no parameters are provided
-#       the `DataSet` object.
-#     Otherwise, the parameters provided there overwrite these values.
+# Config: Apply logic
 ###############################################################################
-#dataset_settings = {
-#    # This is a parameter that defines the data that will be gathered
-#    #   via downloading and/or selecting from the data archive stored locally.
-#    #   It has this strange json-like form because it is used directly
-#    #   in the REST API for GDC via the gdc-client binary
-#    "filt":
-#            # Default to Glioma RNA and DNA
-#            {"op":'and',
-#              "content":
-#                [{"op":"IN",
-#                  "content":
-#                      {"field": 'cases.disease_type',
-#                       "value": ['Gliomas',
-#                                 'Neuroblastoma']}},
-#                 {"op":"IN",
-#                  "content":
-#                      {"field": 'files.analysis.workflow_type',
-#                       "value": ["HTSeq - FPKM",
-#                                 "Liftover"]}}]},
-#
-#    # Upper limit for the number of file to load/download
-#    #   We default to a non-huge number here to save people time when testing
-#    "size": 10**2,
-#
-#    # The different contrasts to be considered in differentially expressed
-#    # gene analysis
-#    "contrasts": ["sample_type"],
-#
-#    # Whether or not to pair data on RNA and DNAm axis
-#    #   TODO: This needs to be improved
-#    "paired_assay": False
-#
-#}
 
-
+# Create directory structure for local data directory on different systems
+for k in conf:
+  data_dir = conf[k]["data_dir"]
+  # Directories and files in the "archive" directory
+  arxiv_dir = path.join(data_dir, "archive")
+  conf[k]["newdata_dir"] = path.join(arxiv_dir, "new")
+  conf[k]["rawdata_dir"] = path.join(arxiv_dir, "raw")
+  conf[k]["mygene_dir"] = path.join(arxiv_dir, "mygene")
+  conf[k]["metadb_path"] = path.join(arxiv_dir, "metadb.tsv.gz")
+  conf[k]["metadb_index_path"] = path.join(arxiv_dir,
+                                                 "metadb_index.tsv.gz")
+  # Create directories and metadata filepaths for all assay types
+  conf[k]["assay_dirs"] = {}
+  for assay in settings["filetype_regex"]:
+    conf[k]["assay_dirs"][assay] = path.join(arxiv_dir, assay)
+    conf[k][f"{assay}_metadata_filepath"] = path.join(arxiv_dir,
+                                                      assay,
+                                                      "feature_metadata.tsv")
 
 ###############################################################################
-# The following values will not be changed often (only specific cases)
+# Settings: Apply logic
 ###############################################################################
-gdc_settings = {
-    # If you have a GDC API key for controlled access,
-    #   place it in the GDC_API.key file
-    "api_key": gdc_api_key,
 
-    # These are the sample metadata features that we will pull
-    #   from the GDC REST API for determining what data we have on disk,
-    #   and for organizing the data
-    "fields":
-            ["id",
-             "file_id",
-             "file_name",
-             "md5sum",
-             "file_size",
-             "data_type",
-             "data_category",
-             "access",
-             "submitter_id",
-             "primary_site",
-             "archive.state",
-             "cause_of_death",
-             "cause_of_death_source",
-             "files.data_category",
-             "analysis.workflow_type",
-             "cases.submitter_id",
-             "cases.case_id",
-             "cases.primary_site",
-             "cases.disease_type",
-             "cases.demographic.race",
-             "cases.demographic.gender",
-             "cases.diagnoses.tumor_stage",
-             "cases.diagnoses.age_at_diagnosis",
-             "cases.samples.tumor_descriptor",
-             "cases.samples.tissue_type",
-             "cases.samples.sample_type",
-             "cases.samples.sample_id",
-             "cases.samples.portions.analytes.aliquots.aliquot_id",
-             "cases.project.project_id"
-             "cases.follow_ups.comorbidity",
-             "cases.follow_ups.diabetes_treatment_type",
-             "cases.follow_ups.bmi",
-             "cases.follow_ups.risk_factor",
-             "cases.follow_ups.risk_factor_treatment",
-             "cases.follow_ups.cd4_count"
-             "diagnoses.vital_status"],
+# If you have a GDC API key for controlled access,
+#   place it in the GDC_API.key file
+settings["api_key"] = gdc_api_key
+for assay, regex in settings["filetype_regex"].items():
+  # Compile the regular expressions for the filetypes
+  settings["filetype_regex"][assay] = re.compile(regex)
+  # Parameters for reading different assay types
+  params = {"value_name": "beta_value" if "DNAm" in assay
+                                       else "value",
+            "index_name": "loci" if "DNAm" in assay
+                                 else "index",
+            "dtypes": settings["meth_dtypes"] if "DNAm" in assay
+                                              else (settings["mirna_dtypes"]
+                                                    if assay in ["RNA_miRNA",
+                                                                 "RNA_isoforms"]
+                                                    else None),
+            "header": None if assay in ["RNA_counts",
+                                        "RNA_FPKM",
+                                        "RNA_FPKM-UQ"]
+                           else 0,
+            "subset_cols": [0,1] if "DNAm" in assay
+                                 else ([0,3] if assay == "RNA_isoforms"
+                                             else([0,2] if assay == "RNA_miRNA"
+                                                        else None))
+            }
+  settings["read_params"][assay] = params
 
-	# DNA methylation feature dtypes
-    #   (needed for faster parsing of files by Cython)
-    "meth_dtypes":
-            {"Composite Element REF": str,
-             "Beta_value": np.float64,
-             "Chromosome": str,
-             "Start": int,
-             "End": int,
-             "Gene_Symbol": str,
-             "Gene_Type": str,
-             "Transcript_ID": str,
-             "Position_to_TSS": str,
-             "CGI_Coordinate": str,
-             "Feature_Type": str},
-
-    "mirna_dtypes":
-            {"miRNA_ID": str,
-             "isoform_coords": str,
-             "read_count": int,
-             "reads_per_million_miRNA_mapped": np.float64,
-             "cross-mapped": str,
-             "miRNA_region": str},
-
-    "filetype_regexes":
-            {"DNAm_450":re.compile("HumanMethylation450"),
-             "DNAm_27":re.compile("HumanMethylation27"),
-             "RNA_FPKM":re.compile("FPKM\.txt"),
-             "RNA_FPKM-UQ":re.compile("FPKM[\-\.]UQ"),
-             # Files can have either '-' or '.' in name
-             "RNA_counts":re.compile("htseq[\.\-]counts.gz"),
-             "RNA_miRNA":re.compile("mirnas[\.\-]quantification"),
-             "RNA_isoforms":re.compile("isoforms[\.\-]quantification")},
-
-    "null_type_strings":
-            ["not reported",
-             "unknown",
-             "--",
-             "na",
-             "n/a",
-             "null",
-             "none"],
-
-    "gdc_client_path": gdc_client_path,
-    "gdc_filelist_url": gdc_filelist_url,
-    "DNAm_450k_url": DNAm_450k_url,
-    "DNAm_27k_url": DNAm_27k_url,
-}
-
-assay_readparams = {
-    assay:
-             {"values_name": "beta_value" if "DNAm" in assay else "value",
-              "index_name": "loci" if "DNAm" in assay else "index",
-              "dtypes": gdc_settings["meth_dtypes"] if "DNAm" in assay
-                          else (gdc_settings["mirna_dtypes"]
-                                if assay in ["RNA_miRNA","RNA_isoforms"]
-                                else None),
-              "header": None if assay in ["RNA_counts",
-                                               "RNA_FPKM",
-                                               "RNA_FPKM-UQ"] else 0,
-              "subset_cols": [0,1] if "DNAm" in assay
-                                   else ([0,3] if assay == "RNA_isoforms"
-                                               else([0,2] if assay == "RNA_miRNA"
-                                                     else None))
-              }
-  for assay in gdc_settings["filetype_regexes"]}
-
-gdc_settings["assaytype_readparams"] = assay_readparams
-
-###############################################################################
-# These values keep track of computer configurations
-#   i.e. if you want to store the downloaded data at another location on disk,
-#   you can add your own configuration key here
-#   (shown here as 'default' or 'wrenlab')
-#   This will likely only be changed once, during initial setup
-#   In order to use your configuration key, set the `config_key` parameter
-#   in the DataSet object
-###############################################################################
-local_settings = {
-                  # Default configuration uses the `data` directory within
-                  #   this git repo, as any other assumptions of file storage
-                  #   may not work for the user
-                  "default":
-                    {"data_dir": default_data_dir,
-                     "newdata_dir": path.join(default_data_dir, "new"),
-                     "rawdata_dir": path.join(default_data_dir, "raw"),
-                     "mygene_dir": default_mg_dir,
-                     "metadatabase_path": path.join(default_data_dir, "metadatabase.tsv.gz"),
-                     "assay_dirs":
-                     {assay_dir: path.join(default_data_dir, assay_dir)
-                      for assay_dir in gdc_settings["filetype_regexes"]},
-                     "DNAm_450k_metadata_filepath":
-                     path.join(default_data_dir, "DNAm_450", "feature_metadata.tsv"),
-                     "DNAm_27k_metadata_filepath":
-                     path.join(default_data_dir, "DNAm_27", "feature_metadata.tsv"),
-                     # Whether or not to keep raw downloaded files in archive
-                     "keep_raw": False},
-
-                  # Wren lab specific configuration
-                  #   (All our computers have a `/data/` directory
-                  #    for storage of larger files)
-                  "wrenlab":
-                    {"data_dir": wrenlab_data_dir,
-                     "newdata_dir": path.join(wrenlab_data_dir, "new"),
-                     "rawdata_dir": path.join(wrenlab_data_dir, "raw"),
-                     "mygene_dir": wrenlab_mg_dir,
-                     "metadatabase_path": path.join(wrenlab_data_dir, "metadatabase.tsv.gz"),
-                     "assay_dirs":
-                     {assay_dir: path.join(wrenlab_data_dir, assay_dir)
-                      for assay_dir in gdc_settings["filetype_regexes"]},
-                     "DNAm_450k_metadata_filepath":
-                     path.join(wrenlab_data_dir, "DNAm_450", "feature_metadata.tsv"),
-                     "DNAm_27k_metadata_filepath":
-                     path.join(wrenlab_data_dir, "DNAm_27", "feature_metadata.tsv"),
-                     "keep_raw": True}
-                 }
-
-
-# Store all of these settings in a dictionary, keyed by the local_settings key
-#   (Such that we can obtain the correct settings
-#       given a config_key, such as 'wrenlab', across all classes)
-SETTINGS = {config_key: dict(gdc_settings, **lclvals)
-#                            .update(lclvals)#\
-#                            .update(dataset_settings)\
-            for config_key, lclvals in local_settings.items()}
-
+# Store all of these settings in a dictionary
+SETTINGS = {config_key: dict(settings, **vals)
+            for config_key, vals in conf.items()}
