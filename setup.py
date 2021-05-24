@@ -49,6 +49,6 @@ setup(
                       "rpy2",
                       "mygene",
                       "requests_cache",
-                      "git+git://github.com/Maayanlab/geode.git"
+                      "geode @ git+git://github.com/Maayanlab/geode.git"
                       ]
 )

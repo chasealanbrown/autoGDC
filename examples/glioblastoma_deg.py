@@ -13,6 +13,7 @@ plt.rcParams['legend.fontsize'] = 14
 
 sns.set_style("whitegrid")
 
+
 def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
   """
   Helper function to grab all samples labeled as GBM RNA expression data
@@ -24,13 +25,15 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
 
   # Using metadata database on local disk
   archive = Archive()
-  metadb = archive.metadatabase
+  metadb = archive.metadb
+  print(metadb)
+  print(metadb.columns)
   expr_bool = metadb.data_type == "Gene Expression Quantification"
   disease_bool = metadb.disease_type == "Gliomas"
-  workflow_bool = metadb.workflow_type == workflow_type
+  #  workflow_bool = metadb.workflow_type == workflow_type
 
   # Should be ~900 samples
-  gbm_expr = metadb[expr_bool & disease_bool & workflow_bool]
+  gbm_expr = metadb[expr_bool & disease_bool] # & workflow_bool]
 
   # This is the type of format that the gdc-client accepts
   #   To discover new combinations easily, try the advanced search on GDC

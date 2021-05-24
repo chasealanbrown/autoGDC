@@ -1,7 +1,7 @@
 import unittest
-from autoGDC import autoGDC
+from autoGDC.app import Dataset
 
-study = autoGDC()
+study = Dataset()
 
 class DownloadTest(unittest.TestCase):
   def test_metadata(self):
@@ -10,6 +10,11 @@ class DownloadTest(unittest.TestCase):
   def test_download(self):
     file_ids = study.metadata.index[0:2].tolist()
     self.assertTrue(study._download(file_ids))
+
+class DataDirectoryStructureTest(unittest.TestCase):
+  def test_initialize_directories(self):
+    self.assertTrue()
+
 
 if __name__ == '__main__':
   unittest.main()

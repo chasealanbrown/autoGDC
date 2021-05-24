@@ -98,14 +98,9 @@ class Dataset:
 			   quantile: bool = True):
 
     self.conf = SETTINGS[config_key]
-    if fields is None:
-      fields = self.conf["fields"]
-    else:
-      fields = fields
-
     self.params = {"filters" : json.dumps(filt),
                    "format" : "tsv",
-                   "fields" : ",".join(fields),
+                   "fields" : ",".join(fields) if fields is not None else None,
                    "size" : str(size)}
 
     self.archive = Archive(config_key = config_key,

@@ -11,7 +11,6 @@ from .collate import Collator
 #LOG = logging.getLogger(__name__)
 
 
-
 class Archive(Collator):
   """
   Summary:
@@ -27,18 +26,13 @@ class Archive(Collator):
                params: dict = None,
                paired_assay: bool = False):
 
-    super().__init__(config_key = config_key,
-                     params = params)
     self.conf = SETTINGS[config_key]
 
-    # Initialize main directories
-    os.makedirs(self.conf["data_dir"],
-                exist_ok = True)
-    os.makedirs(path.join(self.conf["data_dir"], "metadata"),
-                exist_ok = True)
-    # Directory for each biological assay
-    for assay, assay_dir in self.conf["assay_dirs"].items():
-      os.makedirs(assay_dir, exist_ok = True)
+    # Initialize directory structure for data first
+    self._init_dirs()
+
+    super().__init__(config_key = config_key,
+                     params = params)
 
 #    self._databases = None
 
@@ -105,3 +99,16 @@ class Archive(Collator):
 ##    #   for each data type
 #    return
 
+  def _init_dirs(self):
+    LOG.info("This appears to be the first run.\nInitializing directories...")
+    # Initialize main directories
+    dirs = ["data_dir", "archive_dir", "newdata_dir",
+            "rawdata_dir", "mygene_dir", "metadata_dir"]
+    for d in dirs:
+      os.makedirs(self.conf[d], exist_ok = True)
+
+    # Directory for each biological assay
+    for assay, fp in self.conf["assay_dir"].items():
+      os.makedirs(fp, exist_ok = True)
+
+    return

@@ -15,6 +15,7 @@ import pandas as pd
 ## Specific function imports
 from os import path
 from tqdm import tqdm
+from io import StringIO
 #from joblib import Memory
 #from geode import chdir as characteristic_direction
 
@@ -47,9 +48,7 @@ class Collator(Downloader):
         (combined gdc files with the same assay type)
         (indexed by assay type keys)
     """
-    file_map = {assay: path.join(self.conf["data_dir"], f"{assay}.h5")
-                for assay in self.conf["filetype_regexs"]}
-    return file_map
+    return self.conf["db_files"]
 
 
   def _update(self):
@@ -60,32 +59,27 @@ class Collator(Downloader):
 
 
   def _update_databases(self, newdata: dict):
-    if not path.isfile(self.conf["DNAm_450k_metadata_filepath"]):
-      feature_metadata = pd.read_csv(self.conf["DNAm_450k_metadata_filepath"], sep='\t')
-      # Metadata for features should be static
-      #   so this will only be stored once
-      # The mode is "w" for 'write' here, opposed to "a" (append)
-      #   becuase the "write" is applied file-wide. (i.e. rewrites the file)
-      #   However, "a" will also rewrite certain dataframes (overwrites keys)
-      feature_metadata.to_hdf(self.conf["DNAm_450k_metadata_filepath"],
-                              key = "feature_metadata",
-                              mode = "w",
-                              data_columns = True,
-                              format = "table")
-
-    if not path.isfile(self.conf["DNAm_27k_metadata_filepath"]):
-      feature_metadata = pd.read_csv(self.conf["DNAm_27k_metadata_filepath"], sep='\t')
-      feature_metadata.to_hdf(self.conf["DNAm_27k_metadata_filepath"],
-                              key = "feature_metadata",
-                              mode = "w",
-                              data_columns = True,
-                              format = "table")
 
     for assay_type, df in newdata.items():
       db_path = self.database_files[assay_type]
 
-      # If the file doesn't exist yet (first time run / initialization)
+      # First initialize the databases (if needed), storing the
+      #   associated metadata in the database first
+      metadata_fp = self.conf[f"{assay}_metadata_filepath"]
       if not path.isfile(db_path):
+        feature_metadata = pd.read_csv(metadata_fp, sep='\t')
+        # Metadata for features should be static
+        #   so this will only be stored once
+        # The mode is "w" for 'write' here, opposed to "a" (append)
+        #   becuase the "write" is applied file-wide. (i.e. rewrites the file)
+        feature_metadata.to_hdf(db_path,
+                                key = "feature_metadata",
+                                mode = "w",
+                                data_columns = True,
+                                format = "table")
+
+        # This mode *can* be dangerous to use elsewhere
+        #   because "a" will rewrite certain dataframes (overwrites keys)
         append = False
         mode = "a"
 
@@ -96,10 +90,11 @@ class Collator(Downloader):
 
       # Samples are read one at a time and added as columns
       # Here, we need to have samples as the rows for easier indexing in HDF5
+      # TODO: Make sure this is appropriate, or use better logic
       df = df.T
 
-      # The data is indexed by file ids, similar to metadatabase
-      sample_metadata = self.metadatabase.loc[df.index]
+      # The data is indexed by file ids, similar to metadb
+      sample_metadata = self.metadb.loc[df.index]
 
       df.to_hdf(db_path,
                 key = "data",
@@ -113,6 +108,8 @@ class Collator(Downloader):
                              mode = mode,
                              data_columns = True,
                              format = "table")
+    return True
+
 
   def _organize(self) -> dict:
     """
@@ -134,96 +131,57 @@ class Collator(Downloader):
       Provided as a dictionary of dataframes for each assay type.
     """
 
-    newdata = {assaytype: None for assaytype in self.conf["filetype_regexs"]}
+    newdata = {assaytype: None for assaytype in self.conf["filetype_regex"]}
 
     # Now move/delete each file - and get the
     LOG.info("Organizing downloaded files...")
 
     # Each directory in the raw directory
-    newdatapath = self.conf["newdata_dir"]
-    for d in tqdm(os.listdir(newdatapath)):
-      dpath = path.join(newdatapath, d)
+    newdata_path = self.conf["newdata_dir"]
+    for d in tqdm(os.listdir(newdata_path)):
+      dpath = path.join(newdata_path, d)
 
-      if path.isfile(dpath) and path.endswith("tar.gz"):
+      # Tarred and g-zipped files hold several series to be extracted
+      if path.isfile(dpath) and dpath.endswith("tar.gz"):
         with tarfile.open(dpath, "r:gz") as tar:
           for member in tar.getmembers():
             f = tar.extractfile(member)
             if f is not None:
-              content = f.read()
-              member.name
-
-      if not path.isfile(dpath):
-
-        # For each of the files
-        #   (The directory should only have 1 or 2 files)
-        for fname in os.listdir(dpath):
-          fpath = path.join(dpath, fname)
-
-          # Just the bioassay files (not log directory files)
-          if path.isfile(fpath):
-
-#            # Find the assay type (in the filename)
-#            #   make the new filename the file_id
-#            #   and store the file in the assay directory
-#            try:
-#              assay_type = [assay_type for assay_type, regex
-#                                       in self.conf["filetype_regexs"].items()
-#                                       if regex.match(fname)][0]
-#            except ValueError as e:
-#              LOG.warn("""The regular expression for identifiying assay type
-#                       from file names appears to have failed""")
-#              LOG.exception(e)
-#
-#            # Get parameters used for reading data from config
-#            readparams = self.conf["assaytype_readparams"][assay_type]
-#            dtypes = readparams["dtypes"]
-#            header = readparams["header"]
-#            subset_cols = readparams["subset_cols"]
-#            values_name = readparams["values_name"]
-#            index_name = readparams["index_name"]
-#
-#            LOG.debug(f"Reading {fpath}")
-#            try:
-#              # Load data (without extra metadata) into memory
-#              series = pd.read_csv(fpath,
-#                                   sep = "\t",
-#                                   index_col = 0,
-#                                   header = header,
-#                                   usecols = subset_cols,
-#                                   dtype = dtypes,
-#                                   engine = "c").iloc[:,0]
-#
-#              file_id = self.metadatabase[self.metadatabase.file_name == fname].index[0]
-#              series.name = file_id
-#              series.index.name = index_name
-
-
+              series = read_series(fpath = member.name,
+                                   file_content = f.read())
               # Add series to dataframe dictionary of new data
               if newdata[assay_type] is None:
                 newdata[assay_type] = series.to_frame()
               else:
                 newdata[assay_type].join(series.to_frame())
 
-              # Remove or move the whole directory that was downloaded
-              if not self.config["keep_raw"]:
-                LOG.debug(f"Removing {dpath}")
-                shutil.rmtree(dpath)
-              else:
-#                assay_dir = self.conf["assay_dirs"][assay_type]
- #               new_path = path.join(assay_dir, dpath)
-                new_path = path.join(self.conf["rawdata_dir"], dpath)
-                LOG.debug(f"Moving {dpath} to {new_path}")
-                shutil.move(dpath, new_path)
+      # Directories (non-compressed) are treated differently
+      if not path.isfile(dpath):
+        # For each of the files
+        #   (The directory should only have 1 or 2 files)
+        for fname in os.listdir(dpath):
+          fpath = path.join(dpath, fname)
+          # Just the bioassay files (not log directory files)
+          if path.isfile(fpath):
+            series = read_series(fpath)
+            # Add series to dataframe dictionary of new data
+            if newdata[assay_type] is None:
+              newdata[assay_type] = series.to_frame()
+            else:
+              newdata[assay_type].join(series.to_frame())
 
-            except:
-                LOG.info(f"Error processing file: {fpath}")
+      # Remove or move the whole directory that was downloaded
+      if not self.config["keep_raw"]:
+        LOG.debug(f"Removing {dpath}")
+        shutil.rmtree(dpath)
+      else:
+#         assay_dir = self.conf["assay_dirs"][assay_type]
+#         new_path = path.join(assay_dir, dpath)
+        new_path = path.join(self.conf["rawdata_dir"], dpath)
+        LOG.debug(f"Moving {dpath} to {new_path}")
+        shutil.move(dpath, new_path)
 
     return newdata
-
-from os import path
-from io import StringIO
-
-config = SETTINGS[config_key]
 
 
 def read_series(fpath: str, file_content: str = None) -> pd.Series:
@@ -255,7 +213,7 @@ def read_series(fpath: str, file_content: str = None) -> pd.Series:
   except ValueError as e:
     LOG.warn("""The regular expression for identifiying assay type
              from file names appears to have failed""")
-    LOG.exception(e)
+    LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
 
   # Get parameters used for reading data from config
   readparams = self.conf["assaytype_readparams"][assay_type]
@@ -276,7 +234,11 @@ def read_series(fpath: str, file_content: str = None) -> pd.Series:
                          dtype = dtypes,
                          engine = "c").iloc[:,0]
 
-    file_id = self.metadatabase[self.metadatabase.file_name == fname].index[0]
+    file_id = self.metadb[self.metadb.file_name == fname].index[0]
     series.name = file_id
     series.index.name = index_name
+
+  except Exception as e:
+    LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+  return series
 

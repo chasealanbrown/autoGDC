@@ -17,9 +17,9 @@
   #   Linux: ~/.autogdc/data
   data_dir = ""
   # Whether or not to keep raw downloaded files in archive
-  keep_raw = False
+  keep_raw = false
 
 # For use by lab members of Dr. Wren's lab at OMRF
 [wrenlab]
   data_dir = "/data/autogdc/data"
-  keep_raw = True
+  keep_raw = true
