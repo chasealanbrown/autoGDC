@@ -112,7 +112,7 @@ for assay, regex in settings["filetype_regex"].items():
                                        else "value",
             "index_name": "loci" if "DNAm" in assay
                                  else "index",
-            "dtypes": settings["meth_dtypes"] if "DNAm" in assay
+            "dtype": settings["meth_dtypes"] if "DNAm" in assay
                                               else (settings["mirna_dtypes"]
                                                     if assay in ["RNA_miRNA",
                                                                  "RNA_isoforms"]
@@ -121,7 +121,7 @@ for assay, regex in settings["filetype_regex"].items():
                                         "RNA_FPKM",
                                         "RNA_FPKM-UQ"]
                            else 0,
-            "subset_cols": [0,1] if "DNAm" in assay
+            "subset_col": [0,1] if "DNAm" in assay
                                  else ([0,3] if assay == "RNA_isoforms"
                                              else([0,2] if assay == "RNA_miRNA"
                                                         else None))

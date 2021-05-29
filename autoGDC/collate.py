@@ -15,7 +15,7 @@ import pandas as pd
 ## Specific function imports
 from os import path
 from tqdm import tqdm
-from io import StringIO
+from io import BytesIO
 #from joblib import Memory
 #from geode import chdir as characteristic_direction
 
@@ -48,7 +48,7 @@ class Collator(Downloader):
         (combined gdc files with the same assay type)
         (indexed by assay type keys)
     """
-    return self.conf["db_files"]
+    return self.conf["db_file"]
 
 
   def _update(self):
@@ -133,6 +133,9 @@ class Collator(Downloader):
 
     newdata = {assaytype: None for assaytype in self.conf["filetype_regex"]}
 
+    print("++++++++++++++++++++++++++++++++++++")
+    print("ORGANIZING")
+    print("++++++++++++++++++++++++++++++++++++")
     # Now move/delete each file - and get the
     LOG.info("Organizing downloaded files...")
 
@@ -146,9 +149,34 @@ class Collator(Downloader):
         with tarfile.open(dpath, "r:gz") as tar:
           for member in tar.getmembers():
             f = tar.extractfile(member)
+            # TODO: Move all this to read_series()
+            #         A concern of interest is the need for assay_type to be
+            #         used as a key in newdata, as well as in read_series()
+            #         Additionally fname is used both here and in read_series()
             if f is not None:
-              series = read_series(fpath = member.name,
-                                   file_content = f.read())
+              fname = path.basename(member.name)
+              fpath = path.join(dpath, member.name)
+              try:
+                assay_type = [_assay_type for _assay_type, regex
+                                         in self.conf["filetype_regex"].items()
+                                         if regex.search(fname)][0]
+              except IndexError as e:
+                LOG.error(f"file {fname} is not recognized as a series")
+                continue
+
+              except ValueError as e:
+                LOG.warn("""The regular expression for identifiying assay type
+                         from file names appears to have failed""")
+                LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+                continue
+
+              print(fname)
+
+              series = self.read_series(fpath = f.read(),
+                                        fname = fname,
+#                                        fpath = member.name,
+                                        assay_type = assay_type)
+#                                        file_content = f.read())
               # Add series to dataframe dictionary of new data
               if newdata[assay_type] is None:
                 newdata[assay_type] = series.to_frame()
@@ -163,7 +191,22 @@ class Collator(Downloader):
           fpath = path.join(dpath, fname)
           # Just the bioassay files (not log directory files)
           if path.isfile(fpath):
-            series = read_series(fpath)
+            fname = path.basename(fpath)
+            try:
+              assay_type = [_assay_type for _assay_type, regex
+                                       in self.conf["filetype_regex"].items()
+                                       if regex.search(fname)][0]
+            except IndexError as e:
+              LOG.error(f"file {fname} is not recognized as a series")
+              continue
+
+            except ValueError as e:
+              LOG.warn("""The regular expression for identifiying assay type
+                       from file names appears to have failed""")
+              LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+              continue
+
+            series = self.read_series(fpath, assay_type = assay_type)
             # Add series to dataframe dictionary of new data
             if newdata[assay_type] is None:
               newdata[assay_type] = series.to_frame()
@@ -171,7 +214,7 @@ class Collator(Downloader):
               newdata[assay_type].join(series.to_frame())
 
       # Remove or move the whole directory that was downloaded
-      if not self.config["keep_raw"]:
+      if not self.conf["keep_raw"]:
         LOG.debug(f"Removing {dpath}")
         shutil.rmtree(dpath)
       else:
@@ -184,61 +227,60 @@ class Collator(Downloader):
     return newdata
 
 
-def read_series(fpath: str, file_content: str = None) -> pd.Series:
-  """
-  Read a series from a file or a tarfile compressed file (member)
+  def read_series(self, fpath: str, assay_type: str, fname: str = None, file_content: str = None) -> pd.Series:
+    """
+    Read a series from a file or a tarfile compressed file (member)
 
-  Arguments:
-    fpath:
-      This filepath argument is actually a bit nefariously named
-      - it can either be a file path directly, or a path *within a tarfile.
+    Arguments:
+      fpath:
+        This filepath argument is actually a bit nefariously named
+        - it can either be a file path directly, or a path *within a tarfile.
 
-    file_content:
-      If the fpath is derived from a tar, then this will hold the content of
-      the file
-  """
-  if file_content is not None:
-    fpath = StringIO(file_content)
-    fname = fpath
-  else:
-    fname = path.basename(fpath)
+      file_content:
+        If the fpath is derived from a tar, then this will hold the content of
+        the file
+    """
+    if fname is None:
+      fname = path.basename(fpath)
+    # Find the assay type (in the filename)
+    #   make the new filename the file_id
+    #   and store the file in the assay directory
 
-  # Find the assay type (in the filename)
-  #   make the new filename the file_id
-  #   and store the file in the assay directory
-  try:
-    assay_type = [assay_type for assay_type, regex
-                             in self.conf["filetype_regexs"].items()
-                             if regex.match(fname)][0]
-  except ValueError as e:
-    LOG.warn("""The regular expression for identifiying assay type
-             from file names appears to have failed""")
-    LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+    # Get parameters used for reading data from config
+    readparams = self.conf["read_params"][assay_type]
+    dtypes = readparams["dtype"]
+    header = readparams["header"]
+    subset_cols = readparams["subset_col"]
+    values_name = readparams["value_name"]
+    index_name = readparams["index_name"]
 
-  # Get parameters used for reading data from config
-  readparams = self.conf["assaytype_readparams"][assay_type]
-  dtypes = readparams["dtypes"]
-  header = readparams["header"]
-  subset_cols = readparams["subset_cols"]
-  values_name = readparams["values_name"]
-  index_name = readparams["index_name"]
+    LOG.debug(f"Reading {fpath}")
+    try:
+      if file_content is not None:
+        fpath = BytesIO(file_content)
+        series = pd.read_csv(fpath,
+                             sep = "\t",
+                             index_col = 0,
+                             header = header,
+                             usecols = subset_cols,
+                             dtype = dtypes,
+                             engine = "c").iloc[:,0]
 
-  LOG.debug(f"Reading {fpath}")
-  try:
-    # Load data (without extra metadata) into memory
-    series = pd.read_csv(fpath,
-                         sep = "\t",
-                         index_col = 0,
-                         header = header,
-                         usecols = subset_cols,
-                         dtype = dtypes,
-                         engine = "c").iloc[:,0]
+      else:
+        # Load data (without extra metadata) into memory
+        series = pd.read_csv(fpath,
+                             sep = "\t",
+                             index_col = 0,
+                             header = header,
+                             usecols = subset_cols,
+                             dtype = dtypes,
+                             engine = "c").iloc[:,0]
 
-    file_id = self.metadb[self.metadb.file_name == fname].index[0]
-    series.name = file_id
-    series.index.name = index_name
+      file_id = self.metadb[self.metadb.file_name == fname].index[0]
+      series.name = file_id
+      series.index.name = index_name
 
-  except Exception as e:
-    LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
-  return series
+    except Exception as e:
+      LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+    return series
 

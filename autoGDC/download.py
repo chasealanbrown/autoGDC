@@ -2,6 +2,7 @@
 Module for downloading GDC data
 """
 import re
+import os
 from os import path
 from io import StringIO
 import json
@@ -19,7 +20,8 @@ from .config import SETTINGS, LOG
 from .df_utils import subset_paired_assay, metadata_json_to_df
 
 import logging
-LOG.setLevel(logging.DEBUG)
+#LOG.setLevel(logging.DEBUG)
+LOG.setLevel(logging.INFO)
 
 # Feature metadata urls for methylation
 drpbx = "https://www.dropbox.com/s/"
@@ -153,6 +155,7 @@ class Downloader(object):
     self._gdc_fields = None
     self._file_ids = None
     self._owned_file_ids = None
+    self._previously_downloaded_file_ids = None
     self._new_file_ids = None
     self._metadata = None
     self._manifest = None
@@ -343,8 +346,23 @@ class Downloader(object):
       #       Should there be another place to do this?
       #       Are there side effects from removing these?
       #       For example, if we need to call this upstream at app/collate/etc
-      self._new_file_ids = self._new_file_ids - self._previously_downloaded_file_ids
+      self._new_file_ids = list(set(self._new_file_ids) - set(self.previously_downloaded_file_ids))
     return self._new_file_ids
+
+
+  @property
+  def previously_downloaded_file_ids(self):
+    """
+    Summary:
+      The file_ids to be downloaded from GDC
+    """
+    if self._previously_downloaded_file_ids is None:
+      download_dir=self.conf["newdata_dir"]
+      dled_files = os.listdir(download_dir)
+      self._previously_downloaded_file_ids = dled_files
+      LOG.debug("Files already downloaded to temporary download dir %s", dled_files)
+    return self._new_file_ids
+
 
 
   @property

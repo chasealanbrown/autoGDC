@@ -23,3 +23,7 @@
 [wrenlab]
   data_dir = "/data/autogdc/data"
   keep_raw = true
+
+[wrenlab_windows]
+  data_dir = "D:\\autogdc\\data"
+  keep_raw = true

@@ -26,8 +26,6 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
   # Using metadata database on local disk
   archive = Archive()
   metadb = archive.metadb
-  print(metadb)
-  print(metadb.columns)
   expr_bool = metadb.data_type == "Gene Expression Quantification"
   disease_bool = metadb.disease_type == "Gliomas"
   #  workflow_bool = metadb.workflow_type == workflow_type

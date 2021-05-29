@@ -155,17 +155,17 @@ class Dataset:
     LOG.debug(f"Total file_ids already downloaded are: {self.archive.owned_file_ids}")
 
     # File ids required to download
-    LOG.info("Downloading these file_ids:\n{self.archive.new_file_ids}")
-    if self.archive.new_file_ids:
+    LOG.info(f"Downloading these file_ids:\n{self.archive.new_file_ids}")
+#    if self.archive.new_file_ids:
        # This one line does the follwing:
        #   1) Downloads all relevant data
        #   2) Organizes the new data
        #        - Moves/deletes files
        #        - Creates/Adds to HDF5 databases
-       self.archive._update()
+    self.archive._update()
 
     LOG.info("Querying databases for dataset frames...")
-    for assay in tqdm(self.archive.databasefiles):
+    for assay in tqdm(self.archive.database_files):
       LOG.info(f"Querying {assay}...")
       data[assay] = self.archive._read_dataframe(assay)
       # TODO: Figure out a way to store the quantile normed data

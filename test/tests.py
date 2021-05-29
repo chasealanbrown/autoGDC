@@ -16,5 +16,8 @@ class DataDirectoryStructureTest(unittest.TestCase):
     self.assertTrue()
 
 
+def test_all()
+  unittest.main()
+
 if __name__ == '__main__':
   unittest.main()

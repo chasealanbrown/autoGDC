@@ -1,2 +1,7 @@
 - Add local and GDC config yaml files
 - Make ths work by filtering the archive.metadatabase and using that as a study.metadata frame - right now everything is pulled from params, so this can't work
+- Add download files to temporary file while downloading
+- Downloaded files in temporary directory with diskcache using tag
+  Then delete the files with the tag *after* the h5 file has been updated
+
+- Make DOCKER file

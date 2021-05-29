@@ -39,14 +39,14 @@ class Archive(Collator):
   def _read_dataframe(self, assay):
     db_path = self.database_files[assay]
     query = f"file_id in {self.file_ids}"
-    data = pd.read_h5(db_path,
-                      key = "data",
-                      where = query)
-    sample_metadata = pd.read_h5(db_path,
-                                 key = "sample_metadata",
-                                 where = query)
-    feature_metadata = pd.read_h5(db_path,
-                                  key = "feature_metadata")
+    data = pd.read_hdf(db_path,
+                       key = "data",
+                       where = query)
+    sample_metadata = pd.read_hdf(db_path,
+                                  key = "sample_metadata",
+                                  where = query)
+    feature_metadata = pd.read_hdf(db_path,
+                                   key = "feature_metadata")
     return pd.DataFrame(data.values,
                         index = feature_metadata,
                         columns = sample_metadata)
