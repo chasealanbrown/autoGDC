@@ -24,7 +24,6 @@ class CustomFormatter(logging.Formatter):
   }
 
   def format(self, record):
-
     underline = "\033[4m"
     italic = "\033[3m"
     log_head_str = (underline +
@@ -125,6 +124,45 @@ settings["null_type_strings"] = ["not reported",
                                  "n/a",
                                  "null",
                                  "none"]
+
+settings["metadata_dtypes"] = {"id":str,
+                               "filename":str,
+                               "md5":str,
+                               "size":int,
+                               "state":str,
+                               "acl":str,
+                               "project_id":str,
+                               "category":str,
+                               "data_type":str,
+                               "primary_site":str,
+                               "disease_type":str,
+                               "case_id":str,
+                               "submitter_id":str,
+                               "tumor_descriptor":str,
+                               "sample_id":str,
+                               "sample_type":str,
+                               "tissue_type":str,
+                               "aliquot_id":str,
+                               "gender":str,
+                               "race":str,
+                               "age_at_diagnosis":float,
+                               "tumor_stage":str,
+                               "age":float,
+                               "cd4_count":float,
+                               "risk_factor":str,
+                               "bmi":float,
+                               "diabetes_treatment_type":str,
+                               "downloaded":bool,
+                               "organized":bool}
+nested_index_list = ["cases",
+                     "portions",
+                     "samples",
+                     "analytes",
+                     "aliquots",
+                     "follow_ups",
+                     "diagnoses"]
+nested_index_dtypes = {f"nested_{k}_index":float for k in nested_index_list}
+settings["metadata_dtypes"].update(nested_index_dtypes)
 
 settings["meth_dtypes"] = {"Composite Element REF": str,
                "Beta_value": float64,

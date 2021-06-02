@@ -3,6 +3,7 @@ Module for downloading GDC data
 """
 import re
 import os
+import time
 from os import path
 from io import StringIO
 from typing import List
@@ -38,7 +39,7 @@ import sys
 import tempfile
 import urllib.request
 import diskcache
-from Prefixed import Float as si_num
+from prefixed import Float as si_num
 
 
 def nice_num(num):
@@ -46,61 +47,61 @@ def nice_num(num):
   return f"{si_num(num):.0h}"
 
 
-def download_url(url, filepath, params=None, verbose=True):
-  """
-  Summary:
-    Download a file from a specific url with a progress bar.
-  Source (original):
-    https://stackoverflow.com/questions/56795227/how-do-i-make-progress-bar-while-downloading-file-in-python#56796119
-  """
-  parsed = urlparse(url)
-  filename = path.basename(parsed.path)
-  LOG.debug(f"Downloading {filepath} from {url} ...")
-  # TODO:
-  #   If the url points to a directory, this may need to be handled
-  #     by a different function to get all of the files.
-  #     However - here - we *assume* that if `filepath` is a directory,
-  #     then this is simply the location to store the data,
-  #     and we use the filename from the url to save it.
-  if path.isdir(filepath):
-    file_dir = filepath
-    filepath = path.join(file_dir, filename)
+#def download_url(url, filepath, params=None, verbose=True):
+#  """
+#  Summary:
+#    Download a file from a specific url with a progress bar.
+#  Source (original):
+#    https://stackoverflow.com/questions/56795227/how-do-i-make-progress-bar-while-downloading-file-in-python#56796119
+#  """
+#  parsed = urlparse(url)
+#  filename = path.basename(parsed.path)
+#  LOG.debug(f"Downloading {filepath} from {url} ...")
+#  # TODO:
+#  #   If the url points to a directory, this may need to be handled
+#  #     by a different function to get all of the files.
+#  #     However - here - we *assume* that if `filepath` is a directory,
+#  #     then this is simply the location to store the data,
+#  #     and we use the filename from the url to save it.
+#  if path.isdir(filepath):
+#    file_dir = filepath
+#    filepath = path.join(file_dir, filename)
+#
+#  with requests.get(url, stream=True, params=params) as r:
+#    r.raise_for_status()
+#    with open(filepath, 'wb') as f:
+#      datasize = r.headers.get("Content-Length")
+#      datasize = r.headers.get("content-length") if datasize is None else datasize
+#      if verbose:
+#        pbar = tqdm(total = None if datasize is None else int(datasize),
+#                    desc = f"Downloading {filename}...")
+#      for chunk in r.iter_content(chunk_size = 8192):
+#        if chunk:  # filter out keep-alive new chunks
+#          f.write(chunk)
+#          if verbose:
+#            pbar.update(len(chunk))
+#  return filepath
 
-  with requests.get(url, stream=True, params=params) as r:
-    r.raise_for_status()
-    with open(filepath, 'wb') as f:
-      datasize = r.headers.get("Content-Length")
-      datasize = r.headers.get("content-length") if datasize is None else datasize
-      if verbose:
-        pbar = tqdm(total = None if datasize is None else int(datasize),
-                    desc = f"Downloading {filename}...")
-      for chunk in r.iter_content(chunk_size = 8192):
-        if chunk:  # filter out keep-alive new chunks
-          f.write(chunk)
-          if verbose:
-            pbar.update(len(chunk))
-  return filepath
 
-
-def download_post(url: str, data: dict, headers: dict, download_dir: str = "data/"):
-  """
-  Summary:
-    Download data using POST on a REST API with a progress bar.
-  """
-  LOG.info(f"Downloading {data} from {url} ...")
-  try:
-    with requests.post(url, data = json.dumps(data), headers = headers) as r:
-      r_head_cd = r.headers.get("Content-Disposition")
-      r_head_cd = r.headers.get("content-disposition") if r_head_cd is None else r_head_cd
-      file_name = re.findall(r"filename=(.+)", r_head_cd)[0]
-
-      fp = path.join(download_dir, file_name)
-      with open(fp, "wb") as output_file:
-        output_file.write(r.content)
-  except Exception as e:
-    LOG.error(f"Critical Error when downloading {data} from {url}")
-    LOG.error(e)
-  return True
+#def download_post(url: str, data: dict, headers: dict, download_dir: str = "data/"):
+#  """
+#  Summary:
+#    Download data using POST on a REST API with a progress bar.
+#  """
+#  LOG.info(f"Downloading {data} from {url} ...")
+#  try:
+#    with requests.post(url, data = json.dumps(data), headers = headers) as r:
+#      r_head_cd = r.headers.get("Content-Disposition")
+#      r_head_cd = r.headers.get("content-disposition") if r_head_cd is None else r_head_cd
+#      file_name = re.findall(r"filename=(.+)", r_head_cd)[0]
+#
+#      fp = path.join(download_dir, file_name)
+#      with open(fp, "wb") as output_file:
+#        output_file.write(r.content)
+#  except Exception as e:
+#    LOG.error(f"Critical Error when downloading {data} from {url}")
+#    LOG.error(e)
+#  return True
 
 
 class Downloader(object):
@@ -364,6 +365,9 @@ Is this a first time run?\nError: {e}", exc_info=True)
       #   We may also use this if `acl` column: == "[b'open']"]
       open_id_bool = self.metadb.acl.apply(lambda x: "open" in x)
       locked_ids = self.metadb[~open_id_bool].index.tolist()
+      if len(locked_ids)>10: debug_msg = f"{nice_num(len(locked_ids))} files"
+      else: debug_msg = f"these files: {locked_ids}"
+      LOG.debug(f"Access is controlled for {debug_msg}")
 
       self._new_file_ids = list(set(self.file_ids) # File_ids in this study
                                 - set(self.owned_file_ids) # Already downloaded
@@ -396,7 +400,6 @@ Is this a first time run?\nError: {e}", exc_info=True)
       self._previously_downloaded_file_ids = dled_files
       LOG.debug("Files already downloaded to temporary download dir %s", dled_files)
     return self._new_file_ids
-
 
 
   @property
@@ -482,8 +485,11 @@ Is this a first time run?\nError: {e}", exc_info=True)
       LOG.info("Updating the index for all GDC files...")
 
       # Table provided by GDC of filenames, UUIDs, md5sum, etc.
-      download_url(url = self.gdc_filelist_url,
-                   filepath = self.conf["metadb_index_path"])
+      #download_url(url = self.gdc_filelist_url,
+      #             filepath = self.conf["metadb_index_path"])
+      self._cached_download(url = self.gdc_filelist_url,
+                            store_fpath = self.conf["metadb_index_path"],
+                            expired = True)
 
       # Update local status to the value of GDC status
       # TODO:
@@ -533,9 +539,15 @@ database was just updated.""")
       #   The real solution to this is to have a whole module that can track
       #     the versioning of GDC and match this important index file with
       #     the main GDC database.
-      LOG.info("Reading the metadata database...")
+      if LOG.level <= logging.DEBUG:
+        debug_msg = f" at {self.conf['metadb_path']}"
+      else:
+        debug_msg = ""
+      msg = f"Reading the metadata database{debug_msg}..."
+      LOG.info(msg)
       metadb = pd.read_csv(self.conf["metadb_path"],
                            sep = '\t',
+                           dtype = self.conf["metadata_dtypes"],
                            compression = "gzip")
 
       # Set indices to file UUID and enumeration of nested column vals
@@ -551,70 +563,21 @@ database was just updated.""")
       assert "case_id" in metadb.columns
 
     except:
-      LOG.warn("Major Error: metadb is not found or is in wrong format.",
+      LOG.warn(f"Major Error: metadb is not found or is in wrong format.\
+Please try investigating the issue, perhaps manually deleting the file:\
+\n{self.conf['metadb_path']}",
                exc_info=True)
+      # TODO: Try redownloading/reprocessing the file here?
       raise
 
     return metadb
 
 
   def _download_full_metadb(self):
-#    """Download clinical and demographic metadata for each file"""
-#
-#    LOG.warn("""Updating the Metadatabase now.\
-#             \nNOTICE: This will take ~10-30 minutes \
-#             and download lots of data"""")
-#
-#    # Ensure that the index is correct
-#    mdbix = self.metadb_index
-#
-#    sample_metadata_frames = []
-#    # This must be done in chunks (server errors arise if larger sizes used)
-#    chunk_size = 10000
-#    total = mdbix[mdbix.category == "data_file"].shape[0]
-#    num_kilofiles = int(round(len(mdbix)/1000,0))
-#    desc = f"Updating metadata ({num_kilofiles}k files)"
-#    for pos in tqdm(range(0, total, chunk_size), desc = desc):
-#
-#      # The payload gets too large if we pass all fields at the same time
-#      # So, we split the payload into chunks of columns/fields and loop
-#      all_fields = self.gdc_fields.index.tolist()
-#      fld_chunk = 50
-#      chunked_fields = [list(set(all_fields[i:i + fld_chunk] + ["id"]))
-#                        for i in range(0, len(all_fields), fld_chunk)]
-#
-#      for fields_ix, fields in enumerate(chunked_fields):
-#        # Payload for query
-#        #   json is used instead of tsv, because there are some files that
-#        #   end up with lists of values that cause huge sparse tables
-#        #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
-#        #   This is fixed after getting the json to put into a table.
-#        full_metadata_params = {"format": "json",
-#                                "fields": ",".join(fields),
-#                                "size": str(chunk_size),
-#                                "from": str(pos)}
-#        to = pos + chunk_size
-#        fp = path.join(self.conf["metadata_dir"],
-#                       f"metadata{pos}-{to}_{fields_ix}.json")
-#        download_url(url=f"{self.api_url}/files",
-#                     filepath=fp,
-#                     params=full_metadata_params,
-#                     verbose=False)
-#        tmp_df = metadata_json_to_df(fp,
-#                          null_type_strings = self.conf["null_type_strings"])
-#
-#        if fields_ix == 0:
-#          metadatachunk = tmp_df
-#        else:
-#          metadatachunk = metadatachunk.join(tmp_df)#, rsuffix = "_")
-#      sample_metadata_frames += [metadatachunk]
-#
-#    LOG.info("Joining the metadata chunks together...")
-#    sample_metadata_frames = pd.concat(sample_metadata_frames)
-
     mdb_ix = self.metadb_index
     all_data_fileids = mdb_ix[mdb_ix.category == "data_file"].index.tolist()
-    sample_metadata_frames = self._download_metadata(all_data_fileids)
+    sample_metadata_frames = self._download_ids(file_ids=all_data_fileids,
+                                                is_metadata=True)
 
     # This needs to be merge - it allows overlapping columns to 'merge' into
     #   the same column without the need for suffixes and prefixes for
@@ -753,18 +716,8 @@ database was just updated.""")
         #   (using a local git file now - need to use git LFS or ipfs)
         if not path.exists(metadata_path):
           LOG.info("Downloading feature metadata to data directories...")
-          download_url(url, metadata_path)
+          self._cached_download(url = url, store_fpath = metadata_path)
     return True
-
-
-# Done in self.new_file_ids now - which should transfer to self.manifest
-#  def _check_already_downloaded(self):
-#    download_dir=self.conf["newdata_dir"]
-#    dled_files = os.listdir(download_dir)
-#    # FIXME !!!!
-#    self.manifest = self.manifest - dled_files
-#    self.new_file_ids = self.new_file_ids - dled_files
-#    return
 
 
   def _download_data(self, chunk_size: int = 50):
@@ -781,20 +734,33 @@ database was just updated.""")
     """
     # This is automatically downloading determined new_file_ids, so we set
     #   manual to false
-    self._download(is_manual=False)
+
+    self._download_ids(is_manual=False)
     self._download_feature_metadata()
 
     _ix = self.metadb.query("id == @self.new_file_ids").index
     self.metadb.loc[_ix, "downloaded"] = True
+    # TODO:
+    #   The full Metadata database should *definetly* be stored in a different
+    #   database type - Writing an *entire* CSV *every time* we make small
+    #   changes to the "downloaded" field is awful.
+    # FIXME:
+    #   This should be an HDF5 or SQLite database/file in order to make small
+    #   changes more rapidly.  This is (crazily) a bottleneck right now.
+    LOG.debug("Saving changes to `downloaded` field in `metadb` to disk...")
+    t0 = time.time()
     self.metadb.to_csv(self.conf["metadb_path"],
                              sep = '\t',
                              compression = "gzip")
+    t1 = time.time()
+    tr = nice_num(t1-t0)
+    LOG.debug("Saved changes to `downloaded` field in `metadb`. Took {tr} seconds.")
     return True
 
 
   def _download_ids(self,
                     is_manual: bool = True,
-                    is_metadata: bool = True,
+                    is_metadata: bool = False,
                     file_ids: List[str] = None,
                     verbose: bool = True):
     # This should be set to False for any downloads that use logic to infer
@@ -815,19 +781,24 @@ Please reconsider using `is_manual=True`""")
       file_ids = self.new_file_ids
 
     # Ensure is a list
-    file_ids = list(file_ids)
+    # Also, ensure that it is sorted, for caching via md5 on diskcache to be
+    # consistently recognized
+    file_ids = sorted(list(file_ids))
     if verbose:
       if len(file_ids)>5:
         num_file_rep = f"{nice_num(len(file_ids))} files"
       else:
         num_file_rep = f"file list: {list(file_ids)}"
-      msg = f"""Download starting:\n{num_file_rep}\n(This will take a while!)"""
+      msg = f"""Download starting:\n{num_file_rep}\n(This may take a while!)"""
       LOG.info(msg)
 
     # Chunk size is larger for metadata,
     #   as the info for each file is less bytes
-    if is_metadata: chunk_size = 10000
-    else: chunk_size = 50
+    if is_metadata:
+      chunk_size = 10000
+      sample_metadata_frames = []
+    else:
+      chunk_size = 50
     chunk_iter = range(0, len(file_ids), chunk_size)
     desc = f"Download ({nice_num(chunk_size)} files/iter)"
     for position in tqdm(chunk_iter, desc=desc):
@@ -835,40 +806,18 @@ Please reconsider using `is_manual=True`""")
 
       # Downloading Data Files (Biological Assays)
       if not is_metadata:
-        o = self._cached_download(url=f"{self.api_url}/data"
-                                  post_data={"ids": chunk},
-                                  post_headers={"Content-Type": "application/json"},
-                                  verbose=False)
+        self._cached_download(url=f"{self.api_url}/data",
+                              store_fpath=self.conf["newdata_dir"],
+                              post_data={"ids": chunk},
+                              post_headers={"Content-Type": "application/json"},
+                              verbose=False)
       # Downloading Metadata
       else:
-        o = self._download_metadata_chunk(file_ids=chunk)
-
-
-
-#################################################
-#      file_path = download_post(
-#                    url = f"{self.api_url}/data",
-#                    data = {"ids": chunk},
-#                    headers = {"Content-Type": "application/json"},
-#                    download_dir=self.conf["newdata_dir"])
-#
-#    for position in tqdm(range(0, len(self.manifest), chunk_size)):
-#      # Debugging
-#      pct_dn = round( position/len(self.manifest) * 100.0, 2)
-#      msg = f"Downloading chunk of {chunk_size} files... ({pct_dn}% finished)"
-#      LOG.debug(msg)
-#
-#      chunk = self.manifest.iloc[position: position + chunk_size]
-#
-#      temp_manifest_file = path.join(self.config["data_dir"],
-#                                     "temporary_manifest.txt")
-#      chunk.to_csv(temp_manifest_file, sep = "\t")
-#      subprocess.call([gdc_client_path,
-#                       "download",
-#                       "-m",
-#                       temp_manifest_file,
-#                       "--dir",
-#                       self.config["newdata_dir"]])
+        metadatachunk = self._download_metadata_chunk(file_ids=chunk)
+        sample_metadata_frames += [metadatachunk]
+    if is_metadata:
+      LOG.info("Joining the metadata chunks together...")
+      sample_metadata_frames = pd.concat(sample_metadata_frames)
 
     LOG.debug("All files have been downloaded.")
     return True
@@ -881,10 +830,13 @@ Please reconsider using `is_manual=True`""")
     This function is only used for testing
       and to download *all* metadata in a loop.
     """
-    chunk = file_ids
+    # The chunk of file_ids can't be too large, or we break GDC downloading
+    # Also, ensure that it is sorted, for caching via md5 on diskcache to be
+    # consistently recognized
+    chunk = sorted(file_ids)
     assert len(chunk) <= 10000
 
-    filt = {"op": "in", "content":{"field":"uuid","value":chunk}}
+    filt = {"op": "in", "content":{"field":"uuid","value": chunk}}
 
     # The payload gets too large if we pass all fields at the same time
     # So, we split the payload into chunks of columns/fields and loop
@@ -898,16 +850,9 @@ Please reconsider using `is_manual=True`""")
       metadata_params = {"format": "json",
                          "fields": ",".join(fields),
                          "filters": json.dumps(filt)}
-    #        to = position + chunk_size
-    #        fp = path.join(self.conf["metadata_dir"],
-    #                       f"metadata{position}-{to}_{fields_ix}.json")
-    #        download_url(url=f"{self.api_url}/files",
-    #                     filepath=fp,
-    #                     params=metadata_params,
-    #                     verbose=False)
       o = self._cached_download(url=f"{self.api_url}/files",
-                            get_params=metadata_params,
-                            verbose=False)
+                                get_params=metadata_params,
+                                verbose=True)
       tmp_df = metadata_json_to_df(
                         BytesIO(o),
                         null_type_strings = self.conf["null_type_strings"])
@@ -916,71 +861,8 @@ Please reconsider using `is_manual=True`""")
         metadatachunk = tmp_df
       else:
         metadatachunk = metadatachunk.join(tmp_df)#, rsuffix = "_")
-    sample_metadata_frames += [metadatachunk]
+    return metadatachunk
 
-    LOG.info("Joining the metadata chunks together...")
-    sample_metadata_frames = pd.concat(sample_metadata_frames)
-
-#    if file_ids is None:
-#      LOG.warn("""No file ids were passed to manual metadata download.\
-#\nAborting now.""")
-#      return False
-#
-#    if verbose:
-#      if len(file_ids)>5:
-#        num_file_rep = f"{nice_num(len(file_ids))} files"
-#      else:
-#        num_file_rep = f"file list: {list(file_ids)}"
-#      msg = f"""Download of metadata starting.\n\{num_file_rep}\n\(This will take a while!)"""
-#      LOG.info(msg)
-#
-#    sample_metadata_frames = []
-#    # This must be done in chunks (server errors arise if larger sizes used)
-#    chunk_size = 10000
-#    desc = f"Download metadata ({nice_num(chunk_size)} files/iter)"
-#    chunk_iter = range(0, len(file_ids), chunk_size)
-#    for position in tqdm(chunk_iter, desc=desc, disable=(not verbose)):
-#      chunk = file_ids[position: position + chunk_size]
-#      filt = {"op": "in", "content":{"field":"uuid","value":chunk}}
-#
-#      # The payload gets too large if we pass all fields at the same time
-#      # So, we split the payload into chunks of columns/fields and loop
-#      all_fields = self.gdc_fields.index.tolist()
-#      fld_chunk = 50
-#      chunked_fields = [list(set(all_fields[i:i + fld_chunk] + ["id"]))
-#                        for i in range(0, len(all_fields), fld_chunk)]
-#
-#      for fields_ix, fields in enumerate(chunked_fields):
-#        # Payload for query
-#        #   json is used instead of tsv, because there are some files that
-#        #   end up with lists of values that cause huge sparse tables
-#        #   (e.g. cases.249,submitter_id, cases.250.submitter_id, etc.)
-#        #   This is fixed after getting the json to put into a table.
-#        metadata_params = {"format": "json",
-#                           "fields": ",".join(fields),
-#                           "filters": json.dumps(filt)}
-##        to = position + chunk_size
-##        fp = path.join(self.conf["metadata_dir"],
-##                       f"metadata{position}-{to}_{fields_ix}.json")
-##        download_url(url=f"{self.api_url}/files",
-##                     filepath=fp,
-##                     params=metadata_params,
-##                     verbose=False)
-#        self._cached_download(url=f"{self.api_url}/files",
-#                              get_params=metadata_params,
-#                              verbose=False)
-#        tmp_df = metadata_json_to_df(fp,
-#                          null_type_strings = self.conf["null_type_strings"])
-#
-#        if fields_ix == 0:
-#          metadatachunk = tmp_df
-#        else:
-#          metadatachunk = metadatachunk.join(tmp_df)#, rsuffix = "_")
-#      sample_metadata_frames += [metadatachunk]
-#
-#    LOG.info("Joining the metadata chunks together...")
-#    sample_metadata_frames = pd.concat(sample_metadata_frames)
-#    return sample_metadata_frames
 
   def _init_dirs(self):
     if not path.exists(self.conf["data_dir"]):
@@ -998,24 +880,39 @@ Please reconsider using `is_manual=True`""")
     # Directory for each biological assay
     for assay, fp in self.conf["assay_dir"].items():
       os.makedirs(fp, exist_ok = True)
-
     return
 
+
   def _cached_download(self, url,
+                       store_fpath = None,
                        get_params = None,
                        post_data = None,
                        post_headers = None,
+                       expired: bool = False,
                        verbose: bool = True):
-    # GET request
+
+    # Name of the file without the base url
+    parsed = urlparse(url)
+    filename = path.basename(parsed.path)
+    if store_fpath is not None:
+      # TODO:
+      #   If the url points to a directory, this may need to be handled
+      #     by a different function to get all of the files.
+      #     However - here - we *assume* that if `store_fpath` is a directory,
+      #     then this is simply the location to store the data,
+      #     and we use the filename from the url to save it.
+      if path.isdir(store_fpath):
+        file_dir = store_fpath
+        store_fpath = path.join(file_dir, filename)
+
+    # Calculate cache keys and tags
+    ## GET request
     if post_data is None:
       tag = "url_download"
-      # Ensure the list is sorted such that MD5 is the same
-      if "ids" in post_data:
-        post_data["ids"] = sorted(post_data["ids"])
       # Use the query data with the url as a key
-      postdata_md5 = hashlib.md5(get_params).hexdigest()
-      cache_key = url +
-    # POST request
+      param_md5 = hashlib.md5(str(sorted(get_params)).encode("utf-8")).hexdigest()
+      cache_key = url + param_md5
+    ## POST request
     else:
       tag = "post_download"
       # Ensure the list is sorted such that MD5 is the same
@@ -1026,38 +923,44 @@ Please reconsider using `is_manual=True`""")
       cache_key = url + postdata_md5
 
     # Download the file if it's not already cached
-    if not cache_key in self.cache:
-      LOG.debug(f"Cache miss: {url}")
+    if expired or (not cache_key in self.cache):
+#      if verbose:
+      LOG.debug(f"Downloading {filename} from {url} to temporary file...")
       # Use temporary file to ensure full download is cached if interrupted
       with tempfile.TemporaryDirectory() as wd:
+        # TODO:
+        #   It makes more sense to store a temporary file in the same directory
+        #   as the desired location of the storage_fpath (permanant file
+        #   location).  This way, when we call `cleanup()`, the file can simply
+        #   be renamed, and there is far less time/chance to have an interupt
+        #   called during the rename/move of the file, as it is nearly
+        #   instantaneous; rather than the move/copy of the tmp file to a
+        #   permanant one, which may exist on a different disk and need to be
+        #   copied (i.e. slow, with large chance of interupt problems)
         def cleanup():
           if os.path.exists(wd):
             shutil.rmtree(wd)
         atexit.register(cleanup)
         target = os.path.join(wd, "tmp_download.bin")
+
         # Download Logic
         # TODO: How to handle FTP directory URLs?
 #        urllib.request.urlretrieve(url, target)
         # GET request handling
         if tag == "url_download":
-          # Name of the file without the base url
-          parsed = urlparse(url)
-          filename = path.basename(parsed.path)
-          with requests.get(url, stream=True, params=params) as r:
+          with requests.get(url, stream=True, params=json.dumps(get_params)) as r:
             r.raise_for_status()
             with open(target, 'wb') as f:
               # Try to get content length
               datasize = r.headers.get("Content-Length")
               datasize = r.headers.get("content-length") if datasize is None else datasize
-              if verbose:
-                LOG.debug(f"Downloading {filepath} from {url}")
-                pbar = tqdm(total = None if datasize is None else int(datasize),
-                            desc = f"Downloading {filename}...")
+              pbar = tqdm(total = None if datasize is None else int(datasize),
+                          desc = f"Downloading tmpfile for {filename}...",
+                          disable = not verbose)
               for chunk in r.iter_content(chunk_size = 8192):
                 if chunk:  # filter out keep-alive new chunks
                   f.write(chunk)
-                  if verbose:
-                    pbar.update(len(chunk))
+                  pbar.update(len(chunk))
 
         # POST request handling
         elif tag == "post_download":
@@ -1071,12 +974,19 @@ Please reconsider using `is_manual=True`""")
             with open(target, "wb") as output_file:
               output_file.write(r.content)
 
-
         # Add downloaded data to cache
         with open(target, "rb") as h:
+#          if verbose:
+          LOG.debug("Storing data in download cache")
           self.cache.set(cache_key, h, read=True,
                          tag=tag,
                          expire=self.CACHE_EXPIRE_TIME)
+
+        # Copy temp file to permanant storage
+        if store_fpath is not None:
+#          if verbose:
+          LOG.debug(f"Storing data at {store_fpath}")
+          shutil.move(target, store_fpath)
 
     # Get the data from cache here
     o = self.cache.get(cache_key, read=True)

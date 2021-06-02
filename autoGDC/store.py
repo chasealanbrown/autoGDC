@@ -54,8 +54,10 @@ class Archive(Collator):
       LOG.error("Error while reading the HDF5 databases:\n{e}")
       LOG.error("""Attempting to reconcile by refreshing the database.
                 This may take a while...""")
-
-
+      # TODO
+    except FileNotFoundError as e:
+      LOG.warn("HDF5 database for {assay} not found, returning `None`:\n{e}")
+      return None
 
 #  @property
 #  def files(self):

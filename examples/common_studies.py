@@ -12,9 +12,9 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
                            "STAR - Counts"]
 
   # Using metadata database on local disk
-  study = Dataset(config_key = "default")
-  archive = study.archive
-#  archive = Archive()
+#  study = Dataset(config_key = "default")
+#  archive = study.archive
+  archive = Archive()
   metadb = archive.metadb
   expr_bool = metadb.data_type == "Gene Expression Quantification"
   disease_bool = metadb.disease_type == "Gliomas"
@@ -35,15 +35,15 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
                       "value": ["Gene Expression Quantification"]}} ] }
 
   # Main Study Oject
-  study.filt = filt
-  study.size = 10**6
-  study.contrasts = ["sample_type"]
-  study.paired_assay = True
-#  study = Dataset(config_key = "default",
-#                  filt = filt,
-#                  size = 10**6,
-#                  contrasts = ["sample_type"],
-#                  paired_assay = True)
+#  study.filt = filt
+#  study.size = 10**6
+#  study.contrasts = ["sample_type"]
+#  study.paired_assay = True
+  study = Dataset(config_key = "default",
+                  filt = filt,
+                  size = 10**6,
+                  contrasts = ["sample_type"],
+                  paired_assay = True)
   return study
 
 
