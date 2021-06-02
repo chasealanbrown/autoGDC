@@ -26,10 +26,9 @@ class Archive(Collator):
                params: dict = None,
                paired_assay: bool = False):
 
-    self.conf = SETTINGS[config_key]
+    # This should get inherited from Downloader
+#    self.conf = SETTINGS[config_key]
 
-    # Initialize directory structure for data first
-    self._init_dirs()
 
     super().__init__(config_key = config_key,
                      params = params)
@@ -39,17 +38,24 @@ class Archive(Collator):
   def _read_dataframe(self, assay):
     db_path = self.database_files[assay]
     query = f"file_id in {self.file_ids}"
-    data = pd.read_hdf(db_path,
-                       key = "data",
-                       where = query)
-    sample_metadata = pd.read_hdf(db_path,
-                                  key = "sample_metadata",
-                                  where = query)
-    feature_metadata = pd.read_hdf(db_path,
-                                   key = "feature_metadata")
-    return pd.DataFrame(data.values,
-                        index = feature_metadata,
-                        columns = sample_metadata)
+    try:
+      data = pd.read_hdf(db_path,
+                         key = "data",
+                         where = query)
+      sample_metadata = pd.read_hdf(db_path,
+                                    key = "sample_metadata",
+                                    where = query)
+      feature_metadata = pd.read_hdf(db_path,
+                                     key = "feature_metadata")
+      return pd.DataFrame(data.values,
+                          index = feature_metadata,
+                          columns = sample_metadata)
+    except KeyError as e:
+      LOG.error("Error while reading the HDF5 databases:\n{e}")
+      LOG.error("""Attempting to reconcile by refreshing the database.
+                This may take a while...""")
+
+
 
 #  @property
 #  def files(self):
@@ -98,17 +104,3 @@ class Archive(Collator):
 ##    # Then add the files that are on the unprocessed dataframes
 ##    #   for each data type
 #    return
-
-  def _init_dirs(self):
-    LOG.info("This appears to be the first run.\nInitializing directories...")
-    # Initialize main directories
-    dirs = ["data_dir", "archive_dir", "newdata_dir",
-            "rawdata_dir", "mygene_dir", "metadata_dir"]
-    for d in dirs:
-      os.makedirs(self.conf[d], exist_ok = True)
-
-    # Directory for each biological assay
-    for assay, fp in self.conf["assay_dir"].items():
-      os.makedirs(fp, exist_ok = True)
-
-    return

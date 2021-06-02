@@ -63,9 +63,11 @@
   RNA_FPKM = "FPKM\\.txt"
   # Files can have either '-' or '.' in name
   RNA_FPKM-UQ = "FPKM[\\.\\-]UQ"
-  RNA_counts = "htseq[\\.\\-]counts.gz"
+  RNA_counts = "htseq[_\\.\\-]counts(\\.txt)?(\\.tsv)?.gz"
   RNA_miRNA = "mirnas[\\.\\-]quantification"
   RNA_isoforms = "isoforms[\\.\\-]quantification"
+  RNA_counts_star = "rna_seq[\\.\\-]star_gene_counts"
+  scRNA_features = "_feature_bc_matrix"
 
 
 ## DNA methylation feature dtypes

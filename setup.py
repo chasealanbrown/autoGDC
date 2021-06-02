@@ -46,6 +46,7 @@ setup(
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
                       "pandas",
+                      "colorama",
                       "rpy2",
                       "mygene",
                       "requests_cache",

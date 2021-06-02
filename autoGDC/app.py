@@ -97,7 +97,8 @@ class Dataset:
                paired_assay: bool = False,
 			   quantile: bool = True):
 
-    self.conf = SETTINGS[config_key]
+    # This should be inherited from Downloader
+#    self.conf = SETTINGS[config_key]
     self.params = {"filters" : json.dumps(filt),
                    "format" : "tsv",
                    "fields" : ",".join(fields) if fields is not None else None,
@@ -109,6 +110,9 @@ class Dataset:
 
     self.contrasts = contrasts
     self._data = None
+
+    self.paired_assay = paired_assay
+    self.quantile = quantile
 
   @property
   def metadata(self):
@@ -171,7 +175,7 @@ class Dataset:
       # TODO: Figure out a way to store the quantile normed data
       #         - could be just in the HDF5, but needs to have additional
       #           parameter to recalc with more data every so often?
-      if self.quantile:
+      if data[assay] is not None and self.quantile:
         LOG.info(f"Quantile normalization of {assay}...")
         data[assay] = quantile_normalize(data[assay])
 

@@ -32,8 +32,8 @@ def metadata_json_to_df(json_filepath: str,
     # The field "data.hits" is of most interest
     df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
 
-  LOG.debug("Converting {json_filepath}\
-            to dataframe - df prior to transforms:\n {df}")
+  LOG.debug(f"Converting {json_filepath}\
+to dataframe - df prior to transforms:\n {df}")
 
   # Expand all of the dictionaries and lists within each column
   #   Neseted structure shown by indentation

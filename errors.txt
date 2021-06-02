@@ -1,0 +1,253 @@
+Summary:
+  * Dependency of tables is needed
+  * All tqdm (need more of them) need *descriptions!* (desc=)
+  * *Some* (?) dataframe (probably metadatabase) has issue:
+    "DtypeWarning: Columns (33) have mixed types.
+    Specify dtype option on import or set low_memory=False.
+  * LOG.debug not showing properly (line 155, self.archive.owned_file_ids)
+  * SettingWithCopyWarning: copy of a slice from a DataFrame 
+  * returning-a-view-versus-a-copy
+  * object name is not a valid Python identifier: 'Composite Element REF'; it does not match the pattern ``^[a-zA-Z_][a-zA-Z0-9_]*
+    - Composite Element REF
+    - Composite Element REF_kind
+    - Composite Element REF_meta
+    - Composite Element REF_dtype
+  * Issues with pytable?
+    - /feature/  _i_table/Gene_Symbol/sorted
+    - /sorted
+    - /sorted2
+    - /feature  _metadata/_i_table/Gene_Type/sorted
+    - /feature  _metadata/_i_table/Transcript_ID/sorted
+    - /feature  _metadata/_i_table/Position_to_TSS/sorted
+
+
+/home/chaxor/home/home/release_testing/autoGDC/examples/glioblastoma_deg.py:57: DtypeWarning: Columns (33)
+have mixed types.Specify dtype option on import or set low_memory=False.
+  study = all_GBM_RNA_data()
+/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py:155: DtypeWarning: Columns (33) have mixed ty
+pes.Specify dtype option on import or set low_memory=False.
+  LOG.debug(f"Total file_ids already downloaded are: {self.archive.owned_file_ids}")
+0it [00:00, ?it/s]
+/home/chaxor/.local/lib/python3.9/site-packages/pandas/core/indexing.py:670: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html
+#returning-a-view-versus-a-copy
+  iloc._setitem_with_indexer(indexer, value)
+100%|█████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 13189.64it/s]
+Traceback (most recent call last):
+  File "/home/chaxor/home/home/release_testing/autoGDC/examples/glioblastoma_deg.py", line 58, in <module>
+    study.ddx()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 295, in ddx
+    df = self.data["RNA_counts"].astype(int)
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 144, in data
+    self._data = self._get_data()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 165, in _get_data
+    self.archive._update()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/collate.py", line 57, in _update
+    self._update_databases(newdata)
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/collate.py", line 76, in _update_databases
+    feature_metadata.to_hdf(db_path,
+  File "/home/chaxor/.local/lib/python3.9/site-packages/pandas/core/generic.py", line 2434, in to_hdf
+    pytables.to_hdf(
+  File "/home/chaxor/.local/lib/python3.9/site-packages/pandas/io/pytables.py", line 267, in to_hdf
+    with HDFStore(
+  File "/home/chaxor/.local/lib/python3.9/site-packages/pandas/io/pytables.py", line 534, in __init__
+    tables = import_optional_dependency("tables")
+  File "/home/chaxor/.local/lib/python3.9/site-packages/pandas/compat/_optional.py", line 110, in import_op
+tional_dependency
+    raise ImportError(msg) from None
+ImportError: Missing optional dependency 'tables'.  Use pip or conda to install tables.
+05/30 02:27 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ pip3 install pytables
+Defaulting to user installation because normal site-packages is not writeable
+ERROR: Could not find a version that satisfies the requirement pytables (from versions: none)
+ERROR: No matching distribution found for pytables
+WARNING: You are using pip version 21.1.1; however, version 21.1.2 is available.
+You should consider upgrading via the '/usr/bin/python3.7 -m pip install --upgrade pip' command.
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ pip3 install tables
+Defaulting to user installation because normal site-packages is not writeable
+Collecting tables
+  Downloading tables-3.6.1-cp37-cp37m-manylinux1_x86_64.whl (4.3 MB)
+     |████████████████████████████████| 4.3 MB 3.5 MB/s
+Collecting numexpr>=2.6.2
+  Downloading numexpr-2.7.3-cp37-cp37m-manylinux2010_x86_64.whl (471 kB)
+     |████████████████████████████████| 471 kB 50.6 MB/s
+Requirement already satisfied: numpy>=1.9.3 in /home/chaxor/.local/lib/python3.7/site-packages (from tables
+) (1.20.3)
+Installing collected packages: numexpr, tables
+Successfully installed numexpr-2.7.3 tables-3.6.1
+WARNING: You are using pip version 21.1.1; however, version 21.1.2 is available.
+You should consider upgrading via the '/usr/bin/python3.7 -m pip install --upgrade pip' command.
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python -m pip install pip
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: pip in /home/chaxor/.local/lib/python3.9/site-packages (21.1.1)
+WARNING: You are using pip version 21.1.1; however, version 21.1.2 is available.
+You should consider upgrading via the '/usr/bin/python -m pip install --upgrade pip' command.
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python -m pip install pip
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: pip in /home/chaxor/.local/lib/python3.9/site-packages (21.1.1)
+WARNING: You are using pip version 21.1.1; however, version 21.1.2 is available.
+You should consider upgrading via the '/usr/bin/python -m pip install --upgrade pip' command.
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python -m pip install pip -U
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: pip in /home/chaxor/.local/lib/python3.9/site-packages (21.1.1)
+Collecting pip
+  Downloading pip-21.1.2-py3-none-any.whl (1.5 MB)
+     |████████████████████████████████| 1.5 MB 7.7 MB/s
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 21.1.1
+    Uninstalling pip-21.1.1:
+      Successfully uninstalled pip-21.1.1
+Successfully installed pip-21.1.2
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ pip3 install tables
+Defaulting to user installation because normal site-packages is not writeable
+^[[ACollecting tables
+  Downloading tables-3.6.1-cp39-cp39-manylinux2010_x86_64.whl (14.3 MB)
+     |████████████████████████████████| 14.3 MB 3.6 MB/s
+Requirement already satisfied: numpy>=1.9.3 in /home/chaxor/.local/lib/python3.9/site-packages (from tables
+) (1.20.1)
+Collecting numexpr>=2.6.2
+  Downloading numexpr-2.7.3-cp39-cp39-manylinux2010_x86_64.whl (471 kB)
+     |████████████████████████████████| 471 kB 136.0 MB/s
+Installing collected packages: numexpr, tables
+Successfully installed numexpr-2.7.3 tables-3.6.1
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python -m pip install tables
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: tables in /home/chaxor/.local/lib/python3.9/site-packages (3.6.1)
+Requirement already satisfied: numexpr>=2.6.2 in /home/chaxor/.local/lib/python3.9/site-packages (from tabl
+es) (2.7.3)
+Requirement already satisfied: numpy>=1.9.3 in /home/chaxor/.local/lib/python3.9/site-packages (from tables
+) (1.20.1)
+05/30 02:28 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python3.8 -m pip install tables
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: tables in /home/chaxor/.local/lib/python3.8/site-packages (3.6.1)
+Requirement already satisfied: numpy>=1.9.3 in /home/chaxor/.local/lib/python3.8/site-packages (from tables
+) (1.18.2)
+Requirement already satisfied: numexpr>=2.6.2 in /home/chaxor/.local/lib/python3.8/site-packages (from tabl
+es) (2.7.1)
+WARNING: You are using pip version 21.1.1; however, version 21.1.2 is available.
+You should consider upgrading via the '/usr/bin/python3.8 -m pip install --upgrade pip' command.
+05/30 02:29 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python3.8 -m pip install -U pip
+Defaulting to user installation because normal site-packages is not writeable
+Requirement already satisfied: pip in /home/chaxor/.local/lib/python3.8/site-packages (21.1.1)
+Collecting pip
+  Using cached pip-21.1.2-py3-none-any.whl (1.5 MB)
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 21.1.1
+    Uninstalling pip-21.1.1:
+      Successfully uninstalled pip-21.1.1
+Successfully installed pip-21.1.2
+
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+
+05/30 02:29 chaxor⊗titan ~/home/home/release_testing/autoGDC ⊗ python examples/glioblastoma_deg.py
+/home/chaxor/home/home/release_testing/autoGDC/examples/glioblastoma_deg.py:57: DtypeWarning: Columns (33)
+have mixed types.Specify dtype option on import or set low_memory=False.
+  study = all_GBM_RNA_data()
+/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py:155: DtypeWarning: Columns (33) have mixed ty
+pes.Specify dtype option on import or set low_memory=False.
+  LOG.debug(f"Total file_ids already downloaded are: {self.archive.owned_file_ids}")
+0it [00:00, ?it/s]
+/home/chaxor/.local/lib/python3.9/site-packages/pandas/core/indexing.py:670: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html
+#returning-a-view-versus-a-copy
+  iloc._setitem_with_indexer(indexer, value)
+100%|█████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 18477.11it/s]
+/home/chaxor/.local/lib/python3.9/site-packages/tables/path.py:155: NaturalNameWarning: object name is not
+a valid Python identifier: 'Composite Element REF'; it does not match the pattern ``^[a-zA-Z_][a-zA-Z0-9_]*
+$``; you will not be able to use natural naming to access this object; using ``getattr()`` will still work,
+ though
+  check_attribute_name(name)
+/home/chaxor/.local/lib/python3.9/site-packages/tables/attributeset.py:464: NaturalNameWarning: object name
+ is not a valid Python identifier: 'Composite Element REF_kind'; it does not match the pattern ``^[a-zA-Z_]
+[a-zA-Z0-9_]*$``; you will not be able to use natural naming to access this object; using ``getattr()`` wil
+l still work, though
+  check_attribute_name(name)
+/home/chaxor/.local/lib/python3.9/site-packages/tables/attributeset.py:464: NaturalNameWarning: object name
+ is not a valid Python identifier: 'Composite Element REF_meta'; it does not match the pattern ``^[a-zA-Z_]
+[a-zA-Z0-9_]*$``; you will not be able to use natural naming to access this object; using ``getattr()`` wil
+l still work, though
+  check_attribute_name(name)
+/home/chaxor/.local/lib/python3.9/site-packages/tables/attributeset.py:464: NaturalNameWarning: object name
+ is not a valid Python identifier: 'Composite Element REF_dtype'; it does not match the pattern ``^[a-zA-Z_
+][a-zA-Z0-9_]*$``; you will not be able to use natural naming to access this object; using ``getattr()`` wi
+ll still work, though
+  check_attribute_name(name)
+/home/chaxor/.local/lib/python3.9/site-packages/tables/leaf.py:402: PerformanceWarning: The Leaf ``/feature
+/_i_table/Gene_Symbol/sorted`` is exceeding the maximum recommended rowsize (104857600 bytes);
+be ready to see PyTables asking for *lots* of memory and possibly slow
+I/O.  You may want to reduce the rowsize by trimming the value of
+dimensions that are orthogonal (and preferably close) to the *main*
+dimension of this leave.  Alternatively, in case you have specified a
+very small/large chunksize, you may want to increase/decrease it.
+  warnings.warn("""\
+/home/chaxor/.local/lib/python3.9/site-packages/tables/leaf.py:402: PerformanceWarning: The Leaf ``/sorted`
+eding the maximum recommended rowsize (104857600 bytes);
+be ready to see PyTables asking for *lots* of memory and possibly slow
+I/O.  You may want to reduce the rowsize by trimming the value of
+dimensions that are orthogonal (and preferably close) to the *main*
+dimension of this leave.  Alternatively, in case you have specified a
+very small/large chunksize, you may want to increase/decrease it.
+  warnings.warn("""\
+/home/chaxor/.local/lib/python3.9/site-packages/tables/leaf.py:402: PerformanceWarning: The Leaf ``/sorted2
+eeding the maximum recommended rowsize (104857600 bytes);
+be ready to see PyTables asking for *lots* of memory and possibly slow
+I/O.  You may want to reduce the rowsize by trimming the value of
+dimensions that are orthogonal (and preferably close) to the *main*
+dimension of this leave.  Alternatively, in case you have specified a
+very small/large chunksize, you may want to increase/decrease it.
+  warnings.warn("""\
+/home/chaxor/.local/lib/python3.9/site-packages/tables/leaf.py:402: PerformanceWarning: The Leaf ``/feature
+_metadata/_i_table/Gene_Type/sorted`` is exceeding the maximum recommended rowsize (104857600 bytes);
+be ready to see PyTables asking for *lots* of memory and possibly slow
+I/O.  You may want to reduce the rowsize by trimming the value of
+dimensions that are orthogonal (and preferably close) to the *main*
+dimension of this leave.  Alternatively, in case you have specified a
+very small/large chunksize, you may want to increase/decrease it.
+  warnings.warn("""\
+/home/chaxor/.local/lib/python3.9/site-packages/tables/leaf.py:402: PerformanceWarning: The Leaf ``/feature
+_metadata/_i_table/Transcript_ID/sorted`` is exceeding the maximum recommended rowsize (104857600 bytes);
+be ready to see PyTables asking for *lots* of memory and possibly slow
+I/O.  You may want to reduce the rowsize by trimming the value of
+dimensions that are orthogonal (and preferably close) to the *main*
+dimension of this leave.  Alternatively, in case you have specified a
+very small/large chunksize, you may want to increase/decrease it.
+  warnings.warn("""\
+/home/chaxor/.local/lib/python3.9/site-packages/tables/leaf.py:402: PerformanceWarning: The Leaf ``/feature
+_metadata/_i_table/Position_to_TSS/sorted`` is exceeding the maximum recommended rowsize (104857600 bytes);
+be ready to see PyTables asking for *lots* of memory and possibly slow
+I/O.  You may want to reduce the rowsize by trimming the value of
+dimensions that are orthogonal (and preferably close) to the *main*
+dimension of this leave.  Alternatively, in case you have specified a
+very small/large chunksize, you may want to increase/decrease it.
+  warnings.warn("""\
+kTraceback (most recent call last):
+  File "/home/chaxor/home/home/release_testing/autoGDC/examples/glioblastoma_deg.py", line 58, in <module>
+    study.ddx()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 295, in ddx
+    df = self.data["RNA_counts"].astype(int)
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 144, in data
+    self._data = self._get_data()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 165, in _get_data
+    self.archive._update()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/collate.py", line 57, in _update
+    self._update_databases(newdata)
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/collate.py", line 95, in _update_databases
+    df = df.T
+AttributeError: 'NoneType' object has no attribute 'T'

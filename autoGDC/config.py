@@ -2,11 +2,56 @@ import re
 import logging
 import toml
 from os import path
+#from sys import stdout
 from numpy import float64
+from colorama import init as colorama_init
+from colorama import Fore, Back, Style
+
+colorama_init()
+
+class CustomFormatter(logging.Formatter):
+  """
+  Logging Formatter to add colors and count warning / errors
+  Source: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
+  """
+
+  FORMAT_STYLES = {
+      logging.DEBUG: Fore.WHITE + Style.DIM,
+      logging.INFO: Style.NORMAL,
+      logging.WARNING: Fore.YELLOW,
+      logging.ERROR: Fore.RED,
+      logging.CRITICAL: Fore.RED + Style.BRIGHT,
+  }
+
+  def format(self, record):
+
+    underline = "\033[4m"
+    italic = "\033[3m"
+    log_head_str = (underline +
+                   "%(asctime)s    %(name)s    %(levelname)s" +
+                   Style.RESET_ALL)
+    log_mid_str = "\n%(message)s\n"
+    log_end_str = (italic + Style.DIM +
+                   "(%(filename)s::%(funcName)s LineNo:%(lineno)d)\n" +
+                   Style.RESET_ALL)
+    style = self.FORMAT_STYLES.get(record.levelno)
+    log_fmt = (style + log_head_str + Style.RESET_ALL +
+               style + log_mid_str + Style.RESET_ALL +
+               style + log_end_str + Style.RESET_ALL)
+    formatter = logging.Formatter(log_fmt, "%H:%M:%S")#"%Y-%m-%d %H:%M:%S")
+    return formatter.format(record)
+
 
 # Logger for package
-logging.getLogger().setLevel(logging.DEBUG)
+#logging.basicConfig() # will print twice with this
 LOG = logging.getLogger("autoGDC")
+LOG.setLevel(logging.DEBUG)
+
+# Create console handler with a higher log level
+ch = logging.StreamHandler()#stdout)
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(CustomFormatter())
+LOG.addHandler(ch)
 
 ###############################################################################
 # Load the config and settings files (static/no-logic part of config)
@@ -28,8 +73,9 @@ with open(path.join(this_path, "..", "GDC_API.key")) as f:
   else:
     l = list(f.readlines())
     if len(l)>1:
-      LOG.error("Ensure that the 'GDC_API.key' file\
-                has only one line of text")
+      LOG.error("ERROR! The GDC_API.key file is improperly formatted!\
+                Ensure that the 'GDC_API.key' file\
+                has only one line of text!")
     gdc_api_key = l[0].strip()
 
 # Load other GDC settings
