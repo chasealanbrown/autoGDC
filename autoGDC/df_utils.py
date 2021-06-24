@@ -7,7 +7,7 @@ from .config import LOG
 
 
 def metadata_json_to_df(json_filepath: str,
-                        null_type_strings: list = ["N/A"])-> pd.DataFrame:
+                        null_type_strings: list = ["N/A"]) -> pd.DataFrame:
   """
   Summary:
     Converting the full GDC metadata from json format to a Dataframe
@@ -28,9 +28,16 @@ def metadata_json_to_df(json_filepath: str,
         -analysis
   """
   # First, convert the json to a dataframe
-  with open(json_filepath) as f:
-    # The field "data.hits" is of most interest
-    df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
+  #   Handle any problems if BytesIO or BufferedReader is given instead of path
+  if hasattr(json_filepath, "readable"):
+    s = json_filepath.read()
+    if isinstance(s, bytes):
+      s = s.decode("utf-8")
+    df = pd.DataFrame(json.loads(s)["data"]["hits"])
+  else:
+    with open(json_filepath) as f:
+      # The field "data.hits" is of most interest
+      df = pd.DataFrame(json.loads(f.read())["data"]["hits"])
 
   LOG.debug(f"Converting {json_filepath}\
 to dataframe - df prior to transforms:\n {df}")

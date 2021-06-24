@@ -45,8 +45,11 @@ setup(
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
-                      "pandas",
+                      "pandas>=1.2", #df.to_parquet() needs to work w/o path
+                      "diskcache",
                       "colorama",
+                      "termcolor", # for gdc-client
+                      "intervaltree", # for gdc-client
                       "rpy2",
                       "mygene",
                       "requests_cache",

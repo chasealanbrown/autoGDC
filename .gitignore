@@ -1,6 +1,7 @@
 *.pyc
 *.*~
 *.pkl
+*.parquet
 *.egg-info
 .ipynb-checkpoints
 */.ipynb_checkpoints/*

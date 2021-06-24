@@ -1,4 +1,9 @@
 Summary:
+  * check on metadb download/json to df conversion:
+    - analysis
+    - project
+    - archive
+
   * Dependency of tables is needed
   * All tqdm (need more of them) need *descriptions!* (desc=)
   * *Some* (?) dataframe (probably metadatabase) has issue:
@@ -19,6 +24,634 @@ Summary:
     - /feature  _metadata/_i_table/Gene_Type/sorted
     - /feature  _metadata/_i_table/Transcript_ID/sorted
     - /feature  _metadata/_i_table/Position_to_TSS/sorted
+
+
+
+
+
+
+In [1]: from examples import common_studies
+   ...: from autoGDC import store
+   ...: #a = store.Archive()
+   ...: #a.new_file_ids
+   ...:
+   ...: #study = common_studies.all_GBM_RNA_data()
+   ...: study = common_studies.paired_dnam_rna()
+   ...: study.ddx()
+   ...: #study
+[ Future queries will be cached in "/home/chaxor/.autogdc/data/archive/mygene/mygene.sqlite" ]
+13:43:47    autoGDC    INFO
+Searching GDC for file_ids that meet criteria...
+(download.py::_get_file_ids LineNo:649)
+
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.8/logging/__init__.py", line 1081, in emit
+    msg = self.format(record)
+  File "/usr/lib/python3.8/logging/__init__.py", line 925, in format
+    return fmt.format(record)
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/config.py", line 41, in format
+    return formatter.format(record)
+  File "/usr/lib/python3.8/logging/__init__.py", line 664, in format
+    record.message = record.getMessage()
+  File "/usr/lib/python3.8/logging/__init__.py", line 369, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File "/home/chaxor/.local/bin/ipython", line 8, in <module>
+    sys.exit(start_ipython())
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/__init__.py", line 126, in start_ipython
+    return launch_new_instance(argv=argv, **kwargs)
+  File "/home/chaxor/.local/lib/python3.8/site-packages/traitlets/config/application.py", line 845, in launch_instance
+    app.start()
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/terminal/ipapp.py", line 356, in start
+    self.shell.mainloop()
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/terminal/interactiveshell.py", line 564, in mainloop
+    self.interact()
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/terminal/interactiveshell.py", line 555, in interact
+    self.run_cell(code, store_history=True)
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/core/interactiveshell.py", line 2894, in run_cell
+    result = self._run_cell(
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/core/interactiveshell.py", line 2940, in _run_cell
+    return runner(coro)
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/core/async_helpers.py", line 68, in _pseudo_sync_runner
+    coro.send(None)
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/core/interactiveshell.py", line 3165, in run_cell_async
+    has_raised = await self.run_ast_nodes(code_ast.body, cell_name,
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/core/interactiveshell.py", line 3357, in run_ast_nodes
+    if (await self.run_code(code, result,  async_=asy)):
+  File "/home/chaxor/.local/lib/python3.8/site-packages/IPython/core/interactiveshell.py", line 3437, in run_code
+    exec(code_obj, self.user_global_ns, self.user_ns)
+  File "<ipython-input-1-48947781e9d8>", line 8, in <module>
+    study.ddx()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 299, in ddx
+    df = self.data["RNA_counts"].astype(int)
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 148, in data
+    self._data = self._get_data()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/app.py", line 156, in _get_data
+    LOG.debug(f"The file_ids for the entire dataset are: {self.archive.file_ids}")
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/download.py", line 340, in file_ids
+    self._file_ids = self._get_file_ids()
+  File "/home/chaxor/home/home/release_testing/autoGDC/autoGDC/download.py", line 671, in _get_file_ids
+    LOG.debug(f"GDC search for file_ids matching query: ", response)
+Message: 'GDC search for file_ids matching query: '
+Arguments: (<Response [200]>,)
+13:43:47    autoGDC    DEBUG
+Query for GDC file_ids returned the following dataframe:
+
+                                  file_id                                    id
+0    1b466557-76dd-4a26-9df4-49172400fb40  1b466557-76dd-4a26-9df4-49172400fb40
+1    70cd540b-8b16-4b8a-a3e8-d3f79d3bfc47  70cd540b-8b16-4b8a-a3e8-d3f79d3bfc47
+2    5cdc04c0-0ab9-4cdc-a740-0966faf4b8e4  5cdc04c0-0ab9-4cdc-a740-0966faf4b8e4
+3    a259b4c1-4c3c-4d25-9a15-9017006025b2  a259b4c1-4c3c-4d25-9a15-9017006025b2
+4    da6ad88b-da1f-4ac7-a148-ecaf8cfd7fde  da6ad88b-da1f-4ac7-a148-ecaf8cfd7fde
+..                                    ...                                   ...
+995  46a46215-7e01-43d4-87c9-5865dc951d9e  46a46215-7e01-43d4-87c9-5865dc951d9e
+996  c9ee37b6-0de7-45b9-84fe-9508cbe63586  c9ee37b6-0de7-45b9-84fe-9508cbe63586
+997  763519bd-230a-4790-a184-ba155b3c1d5b  763519bd-230a-4790-a184-ba155b3c1d5b
+998  dc2729c6-7c31-479b-a677-b9b073a7bd99  dc2729c6-7c31-479b-a677-b9b073a7bd99
+999  3ebd6b8e-bd81-4e17-b61e-4f9995f7f8db  3ebd6b8e-bd81-4e17-b61e-4f9995f7f8db
+
+[1000 rows x 2 columns]
+(download.py::_get_file_ids LineNo:675)
+
+13:43:47    autoGDC    DEBUG
+The file_ids for the entire dataset are: ['1b466557-76dd-4a26-9df4-49172400fb40', '70cd540b-8b16-4b8a-a3e8-d3f79d3bfc47', '5cdc04c0-0ab9-4cdc-a740-0966
+faf4b8e4', 'a259b4c1-4c3c-4d25-9a15-9017006025b2', 'da6ad88b-da1f-4ac7-a148-ecaf8cfd7fde', '5db44bba-97b3-47b1-b561-e5b77a4bf02e', 'df0e1d40-356d-4f79-
+85fb-890648ae15dd', '0a3cd60c-4af2-4429-9c7f-a40903c13e3d', '3fd3d1ba-67f4-4380-800b-af1d8f39b40c', 'cbf27dda-7f51-4fb4-9266-afc8bcbb49f5', '4ab04b3b-f
+a1f-45ef-9cea-b92e88b35d0b', '17097dc0-c3db-4340-b62b-9567842d5594', 'd64e7678-442b-4f4c-93a2-8be3726e67f1', '088fa925-bbe6-44ad-b97f-47f7ba7debb9', 'c
+510ba42-c8f6-407f-9662-35e156c4e442', '428df85b-2242-4925-8743-23c2c58990c2', '8439d23c-d1ec-4871-8bcf-1f6064dbd3bc', '2679f9dd-c187-4cec-8d0b-d39442c8
+4701', '5b2a150c-35dc-4be9-846e-4c68dfda852c', '519bb9c4-4cf7-4f93-8151-38ee1739d826', 'cb18a2e0-bb7b-4bfb-86b6-8bebe6b299d7', '47b5324a-2253-4e19-bbc9
+-5c2b4d1fb605', '4f86be11-77c3-4437-9fcb-7196a2f681d8', 'ec355c10-639b-4fdb-84be-95bdef76258a', 'a18cdc7c-d45b-4677-a2de-00c33e023287', '81dd020d-5936-
+4ae8-86b1-c04c1b8b4800', '49f8e4a0-262d-42dd-bfa4-7ed46316e2ed', 'e4dc991b-156e-4179-add5-f4f61430d338', '55d710a9-a177-4f8b-89e4-68fe7faf0700', '2efae
+389-685b-46c9-a55c-5974f11a89d4', '6157ce17-dc52-4fa3-8579-88c73dc562e1', 'f0d374bd-63e9-46f1-8cd9-5c212a27046c', '737a48c7-ccab-4f7d-90ef-6c69c21ddae3
+', 'ea6288a9-70e3-40ea-a101-7a86dc129896', '0ffc4e29-c88c-4080-9a41-0bdd66368724', '28814c03-0c68-4276-baf2-3a0d891e63f3', 'b8cbbb57-67f9-4167-ab99-13e
+622899f67', '10298e1d-b02c-43f1-a9af-8a280f7d630a', '056a99cb-53ab-4146-9277-33caeb9d1a02', 'da52a9ba-7de5-48c0-ad8c-a0eac27fcf4b', '90f06495-08d2-422a
+-91ba-6218e7b5fc8e', '69270759-de76-45fd-bd12-ada996c4d9aa', 'c5b30be6-a19c-464d-917a-f521a86459e5', '70d38ce8-1101-4b01-a5ba-375ae03287c0', 'b160ce01-
+b760-4b9f-aeed-0dae1f206d0f', '763e1233-0878-430b-b837-c710ef097c80', '82a416d9-20b8-4fd2-9bf3-0c5151b19ec9', '5476de36-6e59-4393-aa32-4411feec4b03', '
+7267ca04-e550-4216-8550-edfa8f71a5ae', 'fc7b29b7-f25b-4272-8f06-277717a7366a', '392e66b7-26a2-49d6-9ecb-b46a49178128', 'e862547f-527e-4d36-90ce-dbcd4eb
+01507', '56ef200a-ce31-433f-9c31-3fd89a270cbb', '8c313638-e80e-4b8b-a400-6a7964362241', 'a335197d-9c33-4617-bcd7-c35932f49fcb', 'c8309e7b-6b9b-48d7-b3f
+8-e97f9c1abde8', 'c067349b-795b-46b1-a868-8e5ec2f55450', '9fff8579-113e-46a2-9263-c1379fb11171', '0a417f7b-3eb8-43dd-b4dc-a593d8d1bc12', 'bb24a55a-91cd
+-4c30-928a-98d1c216c823', 'b400823a-a987-463c-8beb-910edf4d3967', 'afebecf1-9eb3-4f28-b821-0e303c8465a1', '8f624834-587e-4e25-8a08-324a515e4fa1', '4fe7
+a293-df5c-4af3-9ffa-1501f1c9d831', '93289a76-23cd-42b1-9ad4-464a8f8ec5f4', '850e4898-9980-4782-9c76-9aa44a8695d9', 'd0cbc2b8-b29d-4d7e-b538-ac1c752b996
+3', '83604f8a-d1af-40a4-8b7e-6373eea1264d', 'e3e8653f-90ec-4bce-8cf5-3a050906987f', 'a0d98b71-63ed-4790-a33e-87557ea7dd2f', '8a759662-8b77-45d6-8926-a4
+976f4fe9a1', '395fd0cd-5803-430d-a55a-64721a479452', '6011ab64-a45a-4a05-9334-99e0d4a52ab8', '46681652-700e-42fd-889d-a0a927c46cd0', 'c8cd0931-3660-4ef
+1-8911-8789e304277f', '47bb40e0-e73a-4412-a7b8-3b98fd8bf1f8', 'f6e9ade5-d9b4-433e-a866-e547186ff42a', 'c7e75a56-51b4-4e49-b4ac-2f1e12a2c874', 'e3310569
+-1bb3-48e0-9ede-bdac07eeea07', '0d4910db-6c43-4c55-b9fb-a47dccdfadaf', '2bda5428-0422-4cc5-b1ef-8cd0f251f549', 'e30ea52b-f106-4f3a-be44-7b8aef6b0c6f',
+'70d6fe4f-e996-40cd-b8bb-0378acd285bb', '0da8e604-a6d2-48c7-8f1a-a2a78ce935c7', 'eea693cb-11ed-4db9-8ede-6d1276a1f892', '4fe6051b-60e2-4d4a-8709-e49b24
+e4fa61', '206eade4-6a20-44d2-8340-c4d0b0c5acfc', '154489a6-e32b-4c9c-af2b-896c22ba7289', 'b93e98d0-e138-42a6-8ea8-718fd370fe6f', '4cad7891-02df-4580-ba
+f6-52a474e93301', '5ee2a852-a96a-4913-b273-83e22a8aaff7', 'f146515c-a900-4c2f-8aa9-cebdab03cc96', 'ae0780b8-67fd-4313-9da5-b90483f6c845', '427fe10f-757
+4-4ecb-bdf7-90f899351459', 'f60da94f-15a9-4c9f-8ae9-a52292505da3', '915cecea-6972-4331-9807-6c2dfb9cc30a', '1b004d9f-6e23-411e-b5cb-f5da91945c4c', '8e1
+be1a3-97a5-4c22-a2c5-40f42c8e0f1a', '772a4bf0-85e7-4a30-b919-12b8141fe4d5', 'a3a2b16c-d166-4f3a-87a5-07e76032e967', 'd568f37d-00cd-4a6f-9fea-3c51cb77b4
+ea', '52326b67-e347-4eb5-98ed-db3944fe3e55', '0674bbb4-8301-4a9a-8e9e-f9db1baaea10', 'ffabb734-1394-42b1-be6c-c4b9bfdce621', 'f49bf27e-19cd-47f2-a1f1-7
+c21a1b7e346', 'c130c62f-cea4-47b0-b89b-9c9fe36b9c25', '024fe42c-5db7-4bea-a61b-a42eefe32daf', '6dc8d054-87ac-4aad-8a27-a7b49c76c662', '1d2af97c-7217-44
+d7-8dcb-8a0e83036a8c', 'a5c7fcc9-db41-42b8-8406-8e6fe780f12a', '68294cc7-891d-47b5-a817-1ec88521fc6c', 'e05e4fb4-fbc7-400f-90a3-2848418b087f', '3dab985
+c-8f86-4ef7-9187-64e2b7eaf009', '167aef29-9e90-4bd1-ab3c-49bdb9866939', '122c0841-79da-4a55-a3b1-c81cd66faa9d', '78d8f0d7-99f7-4f0d-a1f7-2109e39e025c',
+ 'c2753820-d809-4248-b544-6d32cce5a476', 'a4561c2e-a54a-4bdf-880f-d1b41bc731c8', 'ebd59544-ce82-40b0-9422-cd3a5d566655', '30632037-035e-4020-a0f4-86d68
+646a9cd', '314d2a34-a89b-432c-bee9-be513813761e', 'a52a1d08-3566-4f0c-9f02-e6d5f1b960af', 'e2567946-b4e5-408a-950b-3bb6c130b2a1', 'a0113c5a-bc7a-4e4b-8
+540-030b63509979', '1535a5ce-0160-4243-bd4f-33faa2f4908c', '0cff3230-7176-4d8e-8734-bbffd7d83150', '4ef53c95-52d2-4173-8c3a-d552755d589c', '61707d4f-3c
+8f-42c9-9d63-b3df41065199', '0e8ade26-626f-4124-a9d5-f31d2cfa9b40', '1df36e84-eca9-4996-9449-23c63b38a94a', '7d52a104-10d3-40e3-8232-11e809dcfd37', '8a
+641a5f-af44-4691-a6b4-58a4e7f2c55c', 'cb014a97-d8c8-42a7-8507-ad315e6f8a80', 'c7627351-b381-4fda-9dd7-c0f886f18eeb', '159208f7-3ef7-465e-b24a-51fff52d0
+608', 'a8256ba2-611a-4b6e-9db4-cdd0490e647b', 'd257277b-072f-4b6c-bead-07332de2a533', '8577ad66-1a2d-41df-99c8-ba6b4a5399ac', '7b7f41cb-badb-4662-884b-
+b481e97bb8e2', '2e97bf3d-8729-4ea7-95cf-7eddfcfe2ff8', '1c072746-3cf8-40da-9fc1-9786aa0ff7fe', '4f9b4819-fe4e-445c-8c8f-d385edc4ba6f', '6e8cad17-b488-4
+d15-b8cc-027f64160a0e', 'b5db657f-2eaf-4e0e-b4f9-f5f386aea040', '420099c9-78dd-4735-b61d-3951f64b8e4b', 'dcf9694b-80e3-41b4-9f1f-5438ce78657c', '0a7a86
+a7-94f6-4572-a1ad-71d030233991', 'c29a56d8-593c-40cc-91c1-dcc59ce48617', '7301117c-4623-4219-832b-08d14748d7d7', '8f559a94-2a31-4a70-a538-0a978bce46c5'
+, '59590152-6674-49df-9d7f-22d53ba8ab5d', '099a253b-b739-4495-b920-ed0211d6fa61', 'eb0b5c20-fb63-4828-b9ea-ddbb4a0ddc1f', 'aebc3c98-2fba-4d89-b874-07be
+26a4c335', '418470f5-9c08-4c2b-8798-ccf55ed3352f', '64b217dd-f297-4865-a5c4-d2d09cd488e6', 'f7254232-70be-4a9f-a839-18f2bb8829de', 'ef7a3708-77d9-4ad7-
+a5b3-917bda3990e3', '9f556e92-422e-4a2b-bb7a-e7b8ea38201a', '7a6b98bd-529d-4612-bfed-4de2c7c26907', 'a3b42a57-7126-45e8-83b4-59975baf4c6a', '136dffa7-9
+48a-4d90-90d8-f889546383de', 'bc992e0b-6a12-4fd1-a1d2-87c6bfab5dfe', 'f1414a2e-a0a5-4844-825f-b422c86e8880', '76d1721c-8a4d-4e20-98ce-87d9d379a0e9', '1
+f4e831a-5d7e-48a9-a1fc-5bf9f0f18fd4', 'f74192b2-375b-41bd-840d-b46dc85e1191', '9c1de355-f935-43ac-af9a-c16d09ea46ec', 'fb7c90f1-a69f-4a4c-a571-ebd0326c
+d61c', 'c98b17f2-70d8-4bfd-ac71-e5e3bd42b0f4', 'fe086cda-5e71-4538-83f0-b644f59c2dbd', '9f6799a4-b5e5-42a8-87df-dac7cd466ecc', 'ac47e067-73ff-4d7d-8891
+-dad6f0567fb9', '3bf70cb7-1dde-4c06-9a99-dba5ae6edfd1', '2e49c563-75de-4107-99b7-4316af233ad6', '3b838c73-85e2-4c7e-9d75-83188de6cd11', '105b7dbd-2687-
+49c1-8856-c11e4b39ba04', '756e3a4a-e160-403c-8947-60241d165366', 'f072b96f-775f-42fe-bcf2-37983fe39c13', '3ff4af80-7ed8-4c51-b4aa-ab6662471310', '48571
+34f-b321-4389-9a6d-31bd1f78126f', 'e7f9762b-2664-462a-a539-6bdb4b502463', '1c2251cc-1bf7-4986-a675-4f29a9b37610', 'bc30d7b4-4f86-4a2f-a211-5ce40abdb4cd
+', '5f1f2fcc-1cbd-49a9-b03b-f62d110fd6c3', '38777f23-28b8-4325-b9a9-c7f709a45563', '5e4e8558-3e3d-4496-80ac-e1b5e6ea80bb', '7eca3712-ecf7-4242-aafb-eee
+fc765d855', 'ee8089bd-7ffb-44ba-8721-7a11166e7fd7', '2c92d19a-7186-422b-94ae-55660809a15b', '92e718e5-e051-4ca4-aa4b-6af8564b1474', 'a0c73146-5ad5-42eb
+-9b5a-3a7f898a8eb1', 'a04a3d9a-3142-4fb7-9586-d54af989b4f9', 'e03f8bdc-d3e3-4dc5-8c2c-21e7cc97e41b', '25d2e812-7fe6-4210-bb72-1a4e1da27f47', '1a80e08e-
+5283-451f-9c2d-1bb09b9deeae', '8c593bc3-d15e-454a-a428-2f5791a9e4b5', '23aad7d9-32cc-45a2-98a4-d5919ce05461', '526aa81a-6013-41b0-af81-1dafe5f76ad4', '
+3e5be725-7b90-4e4b-9a49-46a7279f72a8', '6ea69e9d-a785-492d-8853-6c0962382b97', '411a07ae-6bf8-4494-b499-cdb5d06d16c5', 'c574bec0-13a3-4f86-a91f-a20758c
+2ebfd', '27066272-aaaf-449c-8982-14998d541271', '68151e05-de63-4672-84b3-51b939c6d206', '111b334c-a005-4996-968c-0795c09f04d9', '47998d6a-a07a-4e9b-9ec
+1-e8e9a29ce384', 'ce910e21-7452-48a4-8ff7-6938aafb34b1', '295d3c5b-5cc3-46f2-b927-0cd9b1d160ea', 'e2578720-bc94-4423-85ae-0ec0b63df37d', '99a8b066-6b21
+-4591-949a-0128cfc1ce26', 'ce83331b-d5d2-4e58-ac2b-17f2d65806cb', '6838baff-d8f0-43f7-bdc9-78722f572c5a', 'faa83379-035d-4348-b622-7ff930e12376', 'cd8a
+ab1d-ac6f-4025-939d-e6448e6798bc', 'ea71c832-451b-4ce2-8d37-c7a99919a2d6', 'a80d45ba-b772-4cd2-882b-d0a0f411ea4d', 'cfab634e-3c13-40e4-8ab2-564fd2b17fc
+d', '77205b70-6aa2-4afc-a39a-1b6034f1f807', '66484288-d8b7-4a8b-8792-097d664ea1d7', 'bb264b3c-d164-4558-af43-556af20d188a', '24edd378-d642-41c9-8d98-59
+2e8897832a', '0398a148-672f-42d6-bb1a-4864dd209ce8', 'f193ee2a-b6e9-4e8a-824d-3aa614498a0d', '4325554f-16c8-4984-8560-d6f7c0b1f1f1', 'ba6ce7a9-0066-451
+0-9741-6de87561d8e7', 'a0da30aa-8e32-4812-90d8-a15ac5cd15f5', '118b49a1-4651-414d-8d20-721fb71e8fcf', 'f1c4de4e-8809-4d0f-aec8-beb062234391', '2b1b20aa
+-62f1-43a6-a88c-9f8aad867420', '482808ff-4865-4f02-8341-33728eac3a93', '2194d203-17e5-47ee-a10f-4b43d4765af5', 'f12d19ce-1db9-4159-a6f2-ffa7efbdf883',
+'99e05909-2544-4b6c-9571-6f299385747d', '9c1ae816-a2f8-45dc-8cc8-ee820d0fb0a7', '7ea9a568-c2cf-4e97-a423-138185a683e8', '258568c0-db41-4686-a277-ed9a3a
+b06a43', '5b837def-4d74-4f98-8203-c9f8891edbf7', '67887b8e-5478-4464-90de-13b166bcba37', 'd26778d8-ddad-4f29-8b72-fede6c862ab8', '4b13c37b-63a5-4c81-bf
+a8-675fa653d5e8', '9e0d4730-cee2-4f76-9245-be03cbcca011', '5294e039-641d-4a18-80bc-f1087a35f146', 'f2c76f1e-0f50-40b7-a8e8-6049b4d79a8f', 'e1dade85-8d1
+b-43f4-9817-e2130127b121', 'd25a07f9-21a5-4c88-bdd8-2edaea954526', 'c2274382-e753-4cce-9d24-4d1bcc47b2e7', 'd767a687-e22f-47ea-b01f-a12141a97437', '950
+e015e-2304-4824-a19b-9f238105716d', '504bfaaf-041e-4ea9-a124-41d43de52852', '4b674106-49af-4a95-8382-b0e78403631d', 'eb845b9a-9011-45a7-80ef-c6a4534409
+5f', '3403d558-49ae-47b6-a0de-d0450571a037', '026927e2-0850-4d65-b3fa-92d47e38d3a6', 'a5820b4b-36c2-41fc-8669-0f06cfd3ac83', '434fd9b0-5435-418b-b080-a
+e43fc03d81f', '61ca86ef-af2b-4a5e-b1c4-7a7bf534170d', '3cb8ad4b-6a80-438e-aaa8-5e66ece18362', '58a295db-22a1-431b-91ee-e8cd270f970f', '3bb72c4e-fb44-40
+2e-b7f3-a6b5bd07a5f9', '02b99e10-6be0-42fc-8729-71b8de6beb12', 'e255ca74-04bd-454b-9a87-7d51a11bf2c6', '8e6efca5-58c4-4c4b-9350-8ea815afb060', 'be1bf9f
+a-c974-46b7-8ab0-12e2d9568955', 'b39710e5-1b04-451e-be1c-d3178fc2a18d', 'd1c1946d-9c4a-4a52-965c-941ae68ec308', '9502398b-ce9f-4f11-a848-59c3129ab576',
+ '74d442d1-9f6d-4922-828b-87ef507e0e4e', 'fa57a960-c640-4f3e-9a04-cb7766ac25d0', 'a0f0c21c-41f8-45eb-b110-5b5849745287', '77c55d3b-c51c-446a-bc6c-4b589
+91c09b8', '37a27931-bbdd-41e3-ad59-643a1a99f279', '0efc4411-d847-4f9e-8b9e-ea3a18f1724a', '9caae627-014b-4209-b379-a825078dd16e', 'cb189db0-1c01-44a8-a
+61a-6f2c8e3302b1', '2acab9b2-0320-4b7d-bea8-26c041eaf01f', '957b90c9-6281-42c2-a242-21b3417d927c', 'c6598b08-ea74-41ea-b898-c4e6341c3b7d', 'd5af4376-c0
+f3-485a-9a85-abb638d4bc0b', '4456c719-635b-4d41-a399-32bed5fc3a37', 'd4860879-1189-4001-9cbe-1c347151a7c9', '3dea72c4-adc7-46dc-810e-04bbaf0bad4b', '0b
+16a9c7-cd03-4542-a617-96f8a0dca51c', 'f0b23115-6e7c-4c11-ad0f-35c9c18732af', 'a2aa4440-3d25-4b98-bbcd-ca72d2c252b2', '57b6ab3f-82c5-4511-9cad-685684a0c
+100', '14ce7af3-54ab-43a3-b78e-3ad4337d16e5', 'd2683ec7-1de2-4960-a06c-5adbdf8f1d1e', 'a3050565-d0b5-4bd3-bfb6-d38271cef548', '7d947ad1-ab62-4776-bf89-
+c6187caa25e7', '9db352a1-2b7d-4fe9-a3bc-ba623e35d3ce', 'e1cdf086-0c5a-464c-89fa-9b34670b2cad', '40ec1278-27d7-459f-aa67-31a2991c2cc2', '77585352-1f57-4
+7df-a150-aae2b82365a4', 'e7740527-cc56-475f-a123-95ed3ff357c2', '8f5cfb50-4745-48a2-a1f9-fb3b56b8331f', '13003099-a9e7-471c-8830-fae023be1767', '927036
+a9-dcce-4799-8647-e6edc3fed8c7', '4441f037-0522-4e8e-96f6-6b75b29449e9', '5ccf320e-3d60-4a91-9732-1e48dc4934fe', '0be8a1f9-0126-477c-9b89-17d290e35eb6'
+, 'e661655d-0d50-4316-b419-47b2171dc502', 'ae8df5fd-1509-400d-8edb-07c1f9be8b5e', '39fe6471-c933-4e60-925b-1f50427bd501', '8113bf0a-f708-4d4f-b70e-2e9e
+5f978d12', '029e82da-ef7c-4ca8-b20c-fbb85bcb272d', 'fa146e59-682b-475e-919d-073c1948136d', '4da56d3a-8bc8-4d11-aa25-941bef0d201e', 'c427f3bd-4835-4b00-
+a0fa-8a088f38759a', '28c13ea3-139b-4a97-b3c8-6ab7f4583120', '20d7add9-feeb-4705-88c2-8e21902891ef', '735e5431-7e0b-4444-92ec-b661b446fe5c', 'a41ae8bc-e
+025-40c1-823e-e560d80d841e', '55db6e8d-cf5d-4619-a753-7b2016c14498', '070185a7-cae5-41fc-becc-e2f932d9aa83', '9d622c01-3f67-4d0f-bea6-41f6d2b58369', 'e
+10d2d0d-cbd3-4d7f-9ac9-2f5c89922d8a', '7b49680e-d7a7-4b6c-8763-5d0d26c8bc61', '68acd717-d11f-4b61-a69e-1f24ed8a2127', 'ff096cc5-8175-4ec0-be1f-5036e7bd
+7cce', 'f97fa7a6-8c73-4656-8abb-65f09900eb11', '8b364946-e0c7-4452-be4e-220cea70f4ce', '2f17f6de-2278-4d1e-ac84-524bf54a5fe1', 'cefaebf8-5419-4ddd-8dc1
+-e2867d584ce0', 'ec5f2040-7b5c-436b-b993-ff8110419059', 'ae41e3be-2fb2-4545-9b8f-5c5984d6bbf0', 'a5754e31-d2d6-4b69-b3ce-3b34039222f3', '70a0fb72-e7ca-
+4fe5-8eed-7377dfc26b0c', '41c6c072-02e0-4d58-a9c0-c0fd1d8302de', 'f1c50289-1db1-4066-a44c-34e89963ee6d', 'f2edea21-ce45-4fe5-b0de-499c2e50f0c4', '4b9a5
+f27-8516-45c4-bd2c-cb5e96486f6f', 'dfa1e25c-da45-4432-b1c3-ad93d1be6124', '077413d4-9233-4a64-ac64-ada12cd08dd5', '9d37685b-7c6d-4bf9-bb56-b68a19fa956a
+', '22abb232-61e3-4ab7-a4ee-68ac63e98c47', '4ddc2289-69e8-40cf-97a4-0c7233b367d1', '0c9bc998-17a7-42cf-b4d2-b8a5df20ce8b', '078f7608-b8f7-4827-b752-adf
+ed6064922', '9ffe4074-da8b-402b-8820-2d50aff099a0', '1ff2f6cb-76bf-4a3d-8efd-ad4ccf059d05', 'ebce49de-2b04-4824-959b-6712e071436f', '8ae29e04-d836-4652
+-a5f1-ba1b2033f2f9', 'e37fb94c-776d-4feb-a351-b523a9db2d60', '506d194b-e9e5-4380-a913-c5292b9bde9b', '234c8503-8754-4848-b69f-b3ff4a29ea44', 'f821249b-
+0738-49a8-89e6-4756e894d000', 'bfbf294f-fff9-44fd-b88b-e44065c485ec', '846bc7c4-faae-4053-8fea-fe0108eb46e1', 'fb84de32-ed6d-4eeb-890c-05235a3aa853', '
+c0860b7a-7db9-48ac-b5fb-c5f377481cab', 'a93597df-f552-4b43-9985-3a0955b03a1a', '96463113-d20c-405e-b2e8-56eed3faf201', 'aeee0cc4-69ba-4335-8629-57d1ae1
+1716c', '0389c08d-927d-4254-8d7f-f44963594db3', 'e5a1fc0c-20ec-46bf-bd88-7d231842e8e2', 'f95d34ac-5f5c-4ff8-a185-1c4851e66054', '1dcf2fb5-d3ee-4a8d-914
+9-39805d57b1ec', '83483ade-03e1-4963-8877-03fbb11e7707', 'cd24eba4-f8bb-4b82-89e0-c49a77776381', '9d1367c2-b6ff-4aa9-83c3-8e256919d9b8', '2d10d7f3-fd65
+-4cfb-87be-82c82565df00', '54ffed74-ae60-4690-9bcb-8d5e1200ccad', '1eda0c5c-311e-47ba-8f68-ab296a3c8b58', '9237f99f-cc51-4d7f-b99b-02843daa78f2', 'e9d3
+d6ad-bd0b-436e-b542-1698b09021f2', '822df9be-0a84-465c-ab2f-4c5eb5109a0a', '11727d4a-7803-4aa5-9510-4f16ba19116d', '8c3cd0a6-9277-4cd3-abd7-b031a08aee0
+a', '298e02ea-bc72-48a5-8bfa-af556b7f7487', '0995ba80-14c7-4a73-9932-6e085e92b0b2', '9bb9ecef-896d-44fa-a9bc-5dbf56b79053', 'd22adc62-0a38-43d7-bf55-64
+9820ffea97', '1e325442-a40b-4f63-861a-ea4083cf7099', '490a586f-b7bf-434a-b3f5-0f8fc6840609', 'd52be4fa-bd0b-44cf-95ad-30ac7c049afd', 'd4891480-4a04-4bd
+a-809e-754dd8c1f9a8', '6f5fe013-65c9-45de-a559-a136548cdcd7', '12f2970e-36d3-483d-9cd0-cc34df10701f', '807ab4ca-7f1c-4df0-a657-00f77d5b8eb1', 'ffe830c1
+-061d-4123-95c8-48def573a04a', 'f51c4d53-da43-478d-ac70-937a13baa338', 'e0822da0-24d1-413a-b87f-5c6a242d3732', '4c40a116-ee63-4a83-bd3c-bb4f9e8032de',
+'f37cd7df-5e84-4c9f-91b8-4509f4eb7a3b', '93bf7346-9661-4224-8893-0fbb8926d4ff', 'ddf80dbf-7aad-47b0-ad3a-530adf2398a2', '6f335026-6df0-43f8-8076-fb6534
+e4420f', 'c3607b6c-aae4-4b74-87a0-80b5369c3b77', '16276c0a-480c-4dff-82b7-737e02012e9f', 'afd9ffe6-e019-4ea3-ab5f-41a57f9db4de', '6e684fdf-142e-4285-a2
+59-6457763d95a9', '7d6de62c-33fb-4a83-a4ac-9ac5de31cf25', 'd4d9ec1c-fcba-479b-b429-7249209ae1ed', '417c64cb-51ab-41a9-8732-1c8b96821972', 'd9803898-a63
+d-43f0-8097-dc6adbb04cec', 'daabbecf-2b7b-42ef-9057-507f3ce38fb8', '2cd18244-f8b9-44f1-ae65-db00bf4862c8', '905ac122-2f56-4aa9-82f9-88a1c26a9956', '38b
+47667-f217-41bc-a8b5-bd15b213db95', '806ad117-16d0-475e-a6f8-acf0a33389ff', 'ceb2abf7-d5c9-4361-8422-4d28d78d03f2', '4270263e-7fc5-4393-991d-21fb442152
+db', '3c40070c-2738-4d51-9d39-ae70e1c90e5d', 'cf509fab-fcc8-493c-a1c3-bec899991904', 'a351ed7f-10e8-4d82-810a-37f8a7ca667e', '702c319d-00cb-415d-aacb-b
+c443693ed7d', 'ca62082c-d5ea-4608-a438-cd0c918bf32d', '1606df82-0f1e-44a6-81ee-201b627fded3', '7ff2c451-e2f5-4cd9-a456-207ddb2a6486', '4625a926-bda7-4a
+82-bdf5-486809de1e3b', '81be5eaf-0d78-4927-92b1-799cd1ba0490', 'e655bf71-2d14-4595-b984-53efaeac4d65', 'b1cbaa13-ece7-4bdc-994e-ce5bc1b902df', '96cbaf9
+0-06d2-48aa-82bc-ad5d650acee1', '79347803-cf8e-4590-a519-80c3ba449289', '11edb1d1-38e2-40d6-b422-a15ec3315a5c', '0906c604-225b-4354-9e55-c7eeeac1ce83',
+ 'b4772b12-f1ef-4c97-b1da-76c06670fbef', '72edffff-8512-406c-a841-0ccaa27f5127', 'fbfa116d-eea9-424a-90e3-725a3b8b3d0a', '632fff55-afd0-4885-a594-e8a4a
+2828b5e', 'ef44b74e-a7f1-4020-a712-e01cacc553a4', '1932aed6-794b-466c-9f01-44b2a69bd3e9', 'f9566010-0f22-4a31-9235-fac428276158', 'fe53d5ea-96a1-46a5-8
+db1-30ecf3d16d3f', '49e510cd-72ed-43ba-b9f0-da9c795b1b6c', '87ae3617-e6b9-4719-acdd-3e100a0c71c3', '0f2a9e39-e3f9-4c46-9d32-e59731b99e65', 'f768aa0c-32
+21-4674-90e3-99a4aa7ea4a7', '444f0fdf-560a-46e8-b805-9c1bd47537e9', '5bc442de-4389-47ef-9972-de8714c72dc5', '3cdf5d19-8d56-4196-bb2a-0bf5a330986f', '15
+308afb-59b4-44c7-a8c7-78ce87aeb55c', '09f502a3-c624-4085-a8d4-a3d5573c777d', '45454606-b9ee-4732-9903-0ac241067040', '864aab6d-e5a2-4e0e-b5b1-11306de65
+bbc', 'a9295efe-4123-433f-b204-b721452a5a63', 'c634161b-266e-4c07-8afd-6258ef648331', 'f6f25bf1-5733-48f1-860d-1be4d25e3237', 'd3ae5962-33c1-4a0c-9196-
+254fdb1ddac4', 'ee0f7376-d585-4d4d-ba22-4537f235e808', '389df138-66ae-4cb6-af2a-2cb9945a1ff8', '35a2a2ee-1e25-40d9-b6cb-15a2851c390e', 'e0989933-5fd3-4
+361-9b93-85ed46491fdd', '995cb4bc-6d01-4091-ad04-e6f27544db48', 'f71781db-e0dc-41d6-beb4-5efe81447a29', '06c39b40-812d-4a9a-bf39-af4802302cfd', 'b3b1ee
+d3-4b3c-4a82-a3f7-6cec9b9352f0', 'f48a85a4-0f2a-4913-9832-b8d276fd00f0', 'cfc86360-b56c-47ce-8135-814c13a7bc55', 'a94e9f3f-4a77-41cf-b94d-e7ccd9d90109'
+, '8d7bbb00-be54-4833-b442-8507f041e956', 'dc9f87ff-b3c2-461c-8867-c10e7a6aa04d', '1c0313ca-52a6-471a-b069-2c5bec183881', 'a8c01852-70b3-4a7e-8a32-8687
+09026888', 'dca8a4bb-0936-4c92-ac1b-15b1ac15f208', 'b6e3271a-8ab6-4d74-b3a9-f8afd6d5b15c', '0d3d41b0-a9fa-43cb-baa5-969034619430', '57d3e4aa-63b4-4b6a-
+bc6a-19da3b9c66fa', '49b5002c-0f36-4f26-98c8-82b39b919a62', '3af1022c-e45f-4416-9977-ad9746dfcc47', '6a0af6cd-7175-4a30-9458-a5536c4c457a', '0a59e31d-5
+e82-4078-959c-cfe6d773d4c4', 'd0cb7fae-f8b0-4f56-bbb0-b1ced83df2fa', '8718d1dc-a543-414e-b2b0-36f3110408d1', 'fc289d2e-b4dd-493c-8242-e9bc9a4c9bfe', '5
+526b9db-e704-4eeb-88f2-0114c981c447', '61b5aa6b-aa1f-427b-acdb-a9892a92a6b4', 'f12ecc7e-7956-4ca0-91c7-6ebb03686953', 'e4fbd352-6ae8-4e40-b9f3-377692b2
+03a4', '619adbed-eb9e-4b56-b79e-3a2b15ddfcae', '3c8c4df0-aea3-479c-8cc2-1c1c49e39c63', 'ba7c2cbf-9951-46a7-b0df-79238aeac9ce', 'f156dd11-e1c7-4f28-bee9
+-09402325bf0a', '13d27a74-366d-402e-bcad-3b33990450ca', 'cc577b93-2d1c-4c35-9cde-47db994d2291', '62cf137d-47c9-49e0-9c1a-b2301f98f743', 'a40b3279-5f28-
+4d2f-8978-222f99955f9c', '0c20fcf0-085b-42f6-9b78-e899a4c32656', '83b1fbd6-ffd7-4f75-98b3-ad0e49c4d28d', '465643de-7078-4058-b9a6-82b9e2983487', '1bdfa
+f91-88ec-4f4c-a14b-4a51a452bb28', 'd79eec4e-4412-4103-96a1-92e7de3f9e74', 'a666cb8d-5728-413b-ae90-f0718059804d', '930eafaa-639d-49d0-a57b-d3886945c8b4
+', 'd86f17a9-0ee2-4bd1-993d-f23ba7fe3a26', '9042f38b-948f-4f8d-a1e1-8f7050550500', '7bcedf92-a48c-4af0-9493-383a6ffdf9f5', '7a99e0b7-acba-4d42-87b1-44c
+ec74bbd63', '52bf7f7d-166f-4207-8737-ea117f3be518', '5338c9ca-40ab-4fa9-9b55-dccb572321ca', 'b098b471-213c-4285-9b5e-8fc2578c05de', 'e01340a2-770f-43a4
+-96ba-c1223f105964', '63434097-5ed0-435b-9df5-940154e4a72a', '31fc1006-d826-4d63-8fe0-881cce64b722', '8474ff3e-3203-4c80-812a-df8b43b0abc4', '808080d5-
+ed28-4542-a30a-fe0169de2ef3', 'b581bcd2-3754-40ae-ae00-4e25e8ed83b7', 'c00d9829-b06e-4a8a-87fe-b7641525015a', 'ec9e05dd-70c7-4b0c-8414-e4501a277d36', '
+93876005-a9de-4f56-b160-0393f7ef515f', 'd08541d5-41a6-41c0-af66-aa8c301c120f', '4ca97a75-4c87-4847-8aec-b7ddc6aa2366', '8790fe0b-8d3a-4f2c-8201-1231da2
+43697', 'cf08279e-4afa-4fbb-9f22-c8f5fa49c4dd', '73322b08-87ff-4eb3-86cf-406697f3eecb', '5e419520-9a54-49c1-893a-02d7541a5f18', '5463e6ce-b3e3-46ef-bde
+4-8b25af4ecdb7', 'be58fdbf-a0da-46db-89ac-5dc518bdc634', '1cc148e5-4de0-4726-a7bf-fdc1d12061d3', '354b9f1a-cb63-422b-98bc-efd00f272182', '0c763950-a82a
+-42f3-9d68-67be5e5380a8', 'c7d923a0-a854-470e-a6aa-bf6690ee47bf', '94daa651-5d59-4a69-bfd0-b95e146cee04', 'ff5b35ac-1ea0-49b7-8156-0f44760b7ee8', 'c6cb
+5702-0a58-49e1-a1e1-69c333d9d8ce', 'd6fa68ac-d63a-4722-aca0-7fb25534460c', 'c680a261-9fdf-48dd-9e87-274881d700c8', '41956f32-8b00-47f0-9b0a-5402add79cb
+c', 'b4262fe1-6bf8-4dc9-8938-f39ebb626844', '24c6eb66-7e03-4078-868e-d33df83f0851', 'bbfe057f-777c-4ba0-b58c-36dc2b50446a', '7c7f0315-b27e-4bb2-aa28-a2
+41f713a0a4', 'fe02753e-a8d5-487d-87f9-f6879d185f0d', '4dbb7005-c218-434a-a462-6a7243edee12', '034375d5-42e7-469b-a6f3-2d863122f3ca', 'dae5acdc-cd25-4b6
+e-868e-126c384e3e94', '64d56e28-7e24-4fcc-8515-5808bf042d9d', '9c6d7bbd-b0f1-4d9f-ab82-d0a39c2d578b', 'a7fa1cb8-ce6c-4b97-90ea-c43489ca2d2f', 'ccbbba8d
+-6595-468a-89d4-d2516db135d3', '79eaf58d-3f20-4e6b-9006-d71f80dd4898', '8dbb8398-24b8-4204-bd68-97b22c3353a0', 'd1a2673e-034d-405a-95a3-9564d97c50e8',
+'2891b777-ebdd-4cac-81a9-4d22a7d41b3f', '4825f7fc-509b-4ad2-a823-2b50fac9ed53', '5e9586a5-ce28-40b3-8cd6-786e1d1324d3', '017e456a-9eac-4beb-a8dc-ec90f8
+7d7a99', '8df10d9f-e52d-47de-ae24-84604a76709a', 'eb4cdeb9-1980-4832-89fb-fe0e0cddd669', '2c8cde4e-8f36-4b81-b9d0-5e875e0bb017', 'bb7f69e5-2fff-4178-bc
+7b-93a41fbe6123', 'cefd5b49-420f-4611-916b-7a4b7fda6fba', '0ea48cc7-cfe7-46ab-89e2-6919c5ed91fe', 'a2f68d3e-6b24-4bc0-98f4-40a51a2e2441', '22a34bd6-25d
+5-404a-b96d-d2f188a39248', '5a1b001d-875a-44a1-b66f-75cd86c30090', '8e8d73ac-b53d-4988-9067-8293dd14b7ca', 'b8c94000-9416-4737-a7c5-1cb09f59c4b3', 'def
+8f9eb-8f3e-47af-97f3-99b588970937', '6253a9c3-4b64-4339-b40b-43e40a511299', '3a2d36fb-23b8-4617-9af5-e2502fe0e650', '63af2827-c09f-4410-9543-1f97c25e3f
+00', 'ec0b35ab-e9cb-4c3f-bbef-6fc4537f3b66', '426bae83-15fe-4b2b-9e29-5d36c09a4361', 'f1394f51-c3ab-45e8-87a2-fe641f00518e', 'cbdc8782-69cc-49b2-babe-f
+bfc70185547', 'c544160e-c7f3-48a3-9cfb-ab6718a28044', '12d4923b-adf7-403e-9ac2-e2b5b2e26bb9', '3adeff72-0ca3-45e9-882c-0d6b1426f7d6', '6ec8e2af-2ed6-4f
+c8-937c-c617403c6e01', '7219f6f2-cd4c-410c-a435-888945502a71', '8181a85d-a697-42cd-871f-be96b66968d2', '6410ec82-ff32-4664-8098-c94d8933f981', 'ecc6b7a
+3-d7af-4bac-a380-62475c1a9f2e', 'fe16c6ef-a6c1-44bb-984c-b6c249712707', '39f5bb05-50ae-4352-b5a3-399c48c9ad51', 'e91c1fe1-928b-4597-b409-d30d404eb714',
+ 'a4549401-ecce-4b94-9da4-63b18ec51195', 'e47ded12-ac91-4443-981a-94832d0b3593', 'd0f845cb-f147-4d1b-9759-b842c3894b95', '19685baf-1d13-459b-9024-f5452
+054a6e7', 'e6884fcc-790c-4315-aebc-662dd1c63521', 'd80bf507-ae0e-4d71-98a5-851f720ad060', '0ab92514-f37b-42bf-a706-0e2ce88c89d9', '4c5b8219-036c-46f1-8
+7e9-6080a5020b42', '29a9f5bb-393e-48e1-bdee-0231410b1ad1', '2708323a-4525-4029-9047-a89026677221', '707216db-5584-4eba-971c-0c9beefae300', 'decf86c1-c5
+d2-4dd0-99fd-91b17c1e55c8', 'a55cc737-7294-4e35-bdee-06b5c210f954', 'c5aec2f3-834c-4307-8210-3351098b19a4', 'c99ffea1-ceef-4884-a9f9-5314f558487c', 'b6
+163681-94ff-4d9f-82f1-77797d775886', '2a1c1618-e0d2-495f-928f-5d2db1f11610', 'da6ed22f-8583-484c-85d2-cd5f29c4eeeb', '6727d9ca-3d88-4989-add3-9d51fae3e
+31c', 'fea39c57-f0e6-4ced-af69-e5e6d101e03c', '265fa10b-9393-4c95-99a0-df47069deaac', 'e2cfbbf6-0edb-400a-81af-bb34c1a55db4', '2700792e-8c40-425b-848b-
+b198beb48e03', '74a2f6ff-1efc-4437-96f4-c8079ff4972a', '628287b4-2a1e-47b4-8fd1-be8b5e805a4c', 'f8cf629e-005c-4e67-9b34-244214476d1a', '08be15a3-9f74-4
+1b6-93d9-345601c5cda9', '219c220a-5f56-4d85-8d87-00f3e9da2917', '74a7b430-ec80-47aa-95ed-7d202b72219b', '4d4a4e2f-36ee-4869-be53-843d72c246fd', '97bfee
+b0-948d-45a3-8bce-5010f962a97c', '90058d9e-052e-4af1-8b75-602dbcf3bade', '6c491aa2-ab02-4e44-8d1b-1ebf3125469b', 'd1500523-feb5-4b01-94d7-28d9ebf1fb74'
+, '2bb5463a-e3f1-4c8d-bb76-683de37bd3c3', 'a163fc70-a72b-49f9-9a90-90004ffec0d9', 'f5de4fa6-a631-42cf-b260-412681ea4b93', '995c114b-5212-4a13-8547-f887
+c7f39e69', '675eb83e-dfde-4ca3-bbde-5fbe468cb45d', '0d8cc2b6-69bc-446c-82b3-9367cf14be7f', 'cb16f668-0e9c-4a0c-ae9b-eaefa0118dde', '014808e2-fe91-4ef9-
+9b5b-882a9b1d350a', '8364b906-95bf-4b89-af80-edf445e8a2cc', 'bc28ed04-e43d-4481-b108-69a67f468b6a', '8154469f-a060-4ec5-aca4-2022dca6ede2', '27ec5c6e-6
+119-474a-bb61-8d1310d1551b', 'c691bbdb-13f1-437c-ada6-fbffb3fd36be', 'e1efa55d-0fa5-49b6-8abc-387b806bc831', 'bc297e83-d1dc-4b87-b998-113423d686ca', '7
+45c273d-13e8-4479-aee8-2b1e6e335000', '4b6d8adf-cf37-4132-b1c5-1acbb610989d', '6a3ed02c-cbd6-49a1-ab82-065dc847ce97', 'aa42f102-2d65-43a0-86b6-25d25f70
+1644', '98812cb8-69d1-4fcd-9722-045d8b7feefd', 'e5aa3cbf-3fb3-4f83-a1b6-4c3a544a2b03', 'c5f0882a-1165-4c2f-811f-3d992d59599d', '967528b8-52be-41bf-911d
+-952123a299fc', '8be5469b-a815-4000-a52f-67caa1e1d0fa', '73d51444-ce9e-4bc1-9c7b-b65b17af44cf', 'cdc19a84-d056-4169-86e7-7e663e833691', 'f664e3f6-1ffc-
+4238-a14f-341b269ffc84', '4d2a0b5c-34ce-4220-bbf9-ba7ab09e03d1', 'c4b77187-0c37-43bd-8f73-5bcbb5f52964', 'ec7052e9-7671-4b02-8e80-c8e956138ac6', 'b10c4
+14e-48ce-455a-9421-e76101b7e694', '02592889-c63f-40b0-beb4-c538b2d1b797', '70b1471d-7fdf-44ea-940c-a87ef2037f82', '60d902ff-ed05-4c30-9506-5bd2e8ecae3a
+', 'ff12377f-7153-4c30-9948-cd36382387d7', '40b6f6f4-05f8-489d-bec7-2e567bd5776f', '6aa2d357-a2e7-4b85-a552-8cc8700424aa', 'bd11ea82-d346-449c-b63b-a94
+34062e9de', '7cd2e3f1-89f4-447d-800a-803f41027cbf', 'e66bc6e0-bd70-426b-8ec2-452dccd91114', '24faaaa3-233d-4d6e-8420-8474062ffea2', 'f072f702-0af6-4dfb
+-8f40-a7360f613376', 'ae596b2e-39b4-4ed8-bd1b-19a7abfdf243', '3be37b85-90eb-4f47-909a-8be730172d92', '8676f1db-70b2-451b-8e3a-71557c69d320', '3024baeb-
+7f20-4fb8-a1b9-dc572a455b7b', 'a7860e15-42f2-470b-83d8-da5d6657ddff', 'd7684a62-120a-4598-b736-d152b55763f4', 'e5fc4b9a-390d-4617-acb9-454d156af1a6', '
+c29ab2e6-ebc0-46c0-b1da-c0d5a5976d25', 'beaab982-34a7-49c5-8856-817a3c9842e4', 'f882d01f-e367-441b-b10f-148ef89fdbc8', '9c68a687-af95-43b0-918d-85e7079
+fb3e8', '8c0e71c7-876d-443e-860d-40dee3030935', '069d444e-e5c5-4b5f-a166-61a8a094814b', '2482fcf9-fbd2-4c2f-86d7-6167edcb5688', '371e3ba3-45b6-4b1e-bf6
+6-40dc0a77b41f', 'dd878961-acea-45a0-81a9-b34aa4171a6b', '99587bf2-00d7-4e81-979a-aa8a73bf4ebb', 'eaf6af76-2b28-4128-9371-a3d928d72370', '18a132a0-d95c
+-4311-a2e9-3cea86decb0e', '70a5103f-b99a-426c-a017-53534bb11047', '6646e159-5c98-4678-bcb4-d2c6d832dbfe', '81bd670c-397e-4dce-8823-2f1a4cf546c2', 'bdd3
+4fe4-1eb7-40bf-a60a-22fc8ad4bd17', '3157a8cb-4f6b-4a7a-a3b5-d4868302a295', 'e8b8748c-1d04-459f-b946-5f9cab9e07d1', '76a330e1-b96f-48be-98d0-462e956fe9e
+5', '4bf14da6-816b-4ded-a43c-6156560da9f6', '990f24a9-c842-427c-8285-e8d52f91cf94', 'a77b6765-6e36-4909-9cd3-90cd4efb8c6e', 'e3cae4c0-0f6a-4410-981f-16
+5ae9aca8d5', '52070525-2379-46c8-b93e-58c0b1f76f86', 'ceef3e17-3137-4afe-bcac-5241221f848d', '734568a3-c021-43c9-a9d3-7c261c1a81e9', '8f45a07f-25c0-482
+0-b3b9-e2e0bbc54940', 'a7afc563-85cd-4ec9-8ff3-184534dc2398', '18c827cd-d714-4313-9009-8b74d20b5a5b', 'bb5d0996-ddbc-4af9-bb7a-115d09def162', '4d8dab25
+-ba96-4c64-9282-8d8d233f4539', '1c36bec6-b398-44ba-832c-13269e659027', '485f5497-8ed6-4c98-a733-710988850a13', '998295a1-b50e-45ea-b992-e8a7d0f89d8a',
+'871d7ddc-4ac4-4ee4-a827-e7f7caa9b52f', 'c6671b74-6ec8-4b89-a040-2f8860b5e7cb', '96773850-b738-4f65-a820-bb3abfadd864', '4821e883-36ff-4203-ab40-e1343b
+3c7017', '67d37ba4-c5d8-49ce-8e1f-b912cc9a9c3d', '0a40e0e1-a97d-4643-a8b2-2907ea13812e', '2eee1a8a-e7b1-481c-ac39-4d2c6c49183d', '6f6bbffd-1eb4-4b0b-b8
+c5-068fe66d0734', '5a7be94c-d446-479e-93cd-a34f6e27153d', 'f0cb68f6-8824-4fdb-944e-27562e83e97e', '2184f692-a3ba-45c3-baf4-734fd4332f35', '5c480d48-811
+7-48f1-b6d4-c8b420769a43', 'f3be1241-307c-4f15-b213-8af0c6dfbcec', '70702a9c-a74f-4703-9dd5-24a124ebc2d5', '1761e556-5077-47db-ad3e-8315decf9b46', '49f
+2460a-2bc7-4c09-bc04-acabfba65779', '9f3a3491-f349-4279-9238-0afb0a6d2011', '205a7b80-f28e-499d-90d4-a88c08f5e904', '5e168f79-f7af-4484-8064-5eda411599
+d3', 'e6f5763b-ef3e-430a-b47a-dff65e2768eb', '63583659-6fb8-4474-a0fc-5a92a7c33850', '70d83f74-b15d-4920-9407-75fec3ab9ba0', '0bafa55c-88e9-428a-87e5-5
+5c684960583', '5a79be00-de6f-44ab-a0ac-29ec7bbd2087', '45912d52-c02e-4bcd-8634-1b4a6e1c4772', 'b193424f-2772-42c4-b3fa-0c0724be8d0b', '2f1f5190-ad8c-46
+39-841f-2e01f699961d', '9e7b99c1-5734-418d-9af3-ae169ffed65f', '6d88ce71-ecd1-4edf-8935-ea9137ed1ef1', 'bf94aa47-c0b4-4a12-9d6f-db94107b91a3', '186d4fe
+5-343b-4950-b518-a3c8648495c5', '475e9fcb-0779-45ab-b6f6-c27b4e5e2582', '0a7f46b8-2d07-4f24-ad84-4c175f92616f', '86cb800f-a708-4cf2-be4f-29e4de208d15',
+ 'b27bf038-07d9-4b57-aa18-1b0cb95a7917', '354a0ca9-c334-46bf-a8aa-7f2ab506a223', 'f3533714-4d93-4e83-9f58-3c9dda0effba', '42bbb69c-d1de-4b30-b187-ecfec
+ab3d309', '518f1db4-6d57-4f63-b712-413949bb471c', 'ae6e2480-cfb4-4e26-8903-ebf85cc8da03', '3ae1e94c-8281-461a-9759-5af2b9bcbc80', '36e1e28b-5c24-47cb-9
+74a-5a7f43df2079', 'd70e5b81-5c7c-4810-b959-e3bd751996f5', '197313b5-e687-4c73-b6ae-c4ca9ec185ec', '429e5006-0ebe-428b-8233-5e996c5157b5', 'b0cf3eb1-f9
+aa-4062-a61d-a0719155ecad', '80a3007d-3d24-48c8-bdb4-38605dcd408f', 'fb0aa257-225e-4f4e-92d7-b59017ccac93', '52ac3a10-216b-4cac-8368-f655420b1df8', 'c5
+35b134-67bc-46a5-ac01-bf6366cee49e', '6a768149-fb23-462e-9506-e12cfcc98c0c', '628bd291-5337-4a64-8883-c778fb94c1a3', '45975697-886f-49dd-8950-9c61143a7
+0ef', 'd5420e35-8249-4308-b58b-0f9211f424ce', 'fc224adb-2621-4b6f-8a44-1ff2f3f4252a', '6777883d-8f62-4b14-b510-a656f0221444', 'ed985af3-3f47-4926-9117-
+b134a6c4ddff', '93477994-a1d1-4fba-8440-8cc01dfb5484', 'e8e873d3-45cd-441c-adee-6958639baa43', '97e2c4b7-5321-4893-b8bf-a78b84bdb7c0', '828330b1-cd13-4
+3c3-b8d5-1a244ef38458', '51b4f318-7ec8-42c1-96ab-67b582d5c1e2', '72aefa5a-926c-43ba-a170-35214a7e4361', 'f233bba2-88a0-4856-ab6f-0bfaf3f46ca4', '38e828
+fd-8e79-4b0b-937c-9442a65ebca9', '6af66fac-e9dc-43a7-b553-e54cd9e99896', '707a22be-e7f0-4d3e-91d4-deb6e30628c0', 'b275fbf3-e149-4c49-807d-f2d7d236ad87'
+, '638641a8-0302-4d39-b7f5-edd00034e37b', '0aa46e8a-0219-4996-86db-cf021b9c3882', '09ef2304-52ec-4b89-bf13-6c50c867beea', '288f3880-7964-417a-b22b-9af3
+154bc1af', '9b4d7a12-c66d-457f-9bfe-e32afc5a2021', '09d48850-ca9f-4bf0-bd0a-33a737a0b0e2', '66b172d2-29be-4b0d-b52d-465149ec3e57', '114f9d06-c1f3-43ca-
+9188-d64269898250', '715f2d06-d430-4021-a192-7108fa0c1f63', '910c0c07-4964-43d6-a333-ae8cfa651a7c', '64df9b95-7e21-4c43-9fdb-03dc72142da3', '95d570e5-d
+b2e-4559-a3d2-1a86127f8c78', 'b8cc506b-d256-4735-8863-8ffc0c84ec3c', '597789b8-5b5e-47a3-a937-f7bb9979a554', 'a5c94298-8413-4627-a7fb-8e070116cad0', '7
+1b9896d-73fb-4f32-8e6e-e5d839095961', '05dcd3b4-21c7-4c64-8bc7-db1e69572fc5', '4f8f52e4-1a81-42a0-88a5-41e87b6be678', 'd6a0c960-071b-4d72-b6e4-e70668ce
+b9cc', '9c16f338-97f0-4e2b-9447-66d5fe347887', '4187d291-a000-4322-a02d-801c40755608', 'a200cf9b-07c4-4362-89da-632b658b9560', 'eb9b4f6f-ef2e-4bdb-b4c9
+-354ca9b30af6', 'fc94faa7-feaf-476c-abe3-a576e92b147b', '469ca604-aefd-4e6d-9ed4-bd630d17fe4f', '9023262c-0d80-4723-b4ad-43d7b8492fde', 'b58f91d7-a936-
+477a-8ee4-33a4c911ded3', '07b244d3-49dc-4027-bd5c-675ef17f106e', '3e143290-ef56-4c7b-adfa-cd8f03401dbe', '90879f6d-e07a-480d-ab46-5e654b2c8030', 'de3b1
+462-3b7f-461f-acdd-7c04e8bfc11c', '7f73cf13-d6a3-4a76-a5db-aaac249bcdae', '23bc21ba-4d55-4f64-9bfb-8d0fc4c12c1a', '7979f251-0a5f-4425-94ae-93479aeb457c
+', '754e6f3e-9441-423b-8530-b4d95a93253f', 'cbfda205-fa4d-43bc-82fc-58c416e2d1df', 'd382ff76-879d-4071-9e12-442cef2fd973', '344a7f47-645a-4cb9-a569-a87
+d56244cda', '4266c112-6482-4725-bdf9-c79b2134e955', 'c869e324-cbdb-4758-a9a2-067d17430382', '307b2809-3043-47e2-8990-9ffe99460cdc', 'a7dc453b-9326-4992
+-8885-98d487f0a482', '1f21d523-6520-40d1-92b5-77992744f8cc', 'd77f7eb5-1943-4147-8a02-c33289a8ed75', 'e0918738-0931-486d-9e75-a9c21e85b0f8', '5e934adb-
+1792-4f07-b9e8-597094b59ec9', '4c164548-16d9-4241-b82f-fa712815129e', '4c713646-5364-40bb-b26a-0e2d48edd34d', 'e70cc642-063e-4ea4-8fcc-9f5cfe3ce9a9', '
+0e60fb9a-cb4c-4b9b-a1fd-5b2ae091dc5b', '05037c1f-6de0-4d25-9a1c-9f0cd5a200fe', 'a2cddfa2-3a4b-43a8-ac6f-5456e35b3820', '64eddd11-ad89-4eb6-991e-cceaf61
+d2584', '6c1e9c55-925c-4f81-9734-57bfe4f28ce9', '7e4c4d2d-7ecd-41c9-ab61-070c48ad4471', '06245a7f-7fb8-489b-b906-97aad6cc3dd7', '95f396dc-df8e-45fe-b38
+3-c5affd070bf7', 'c137c37d-cc63-4427-b016-c3d62b1b8d35', '38f90934-d79c-4f39-afce-cd6d75bbe747', 'e4d53601-071d-4528-9deb-98d3903cb8b2', 'c63ca17c-149d
+-4fb7-b2d2-e1e478f97449', '16ccbd09-92e4-42b1-aa1b-d0ce2ab55861', '043d0681-2935-4bcd-b952-95ba725677aa', '34e04ca1-9d9f-4695-921c-bfb397d0b791', '03b7
+f117-ca8a-406d-b19e-11c702cc5033', 'bdd656db-67d2-42de-abbe-1b3b02c308c6', 'db481fba-24e0-4df8-a4e0-bb79bc468c53', 'bdf2942a-14dc-40ca-aea4-1224e9efec2
+d', '6cc0570a-e886-4b01-ae70-d87586c6698b', 'eb8fb50a-5d2d-4e3e-8611-1bdce51530fa', '48e0ff61-dea6-4ae6-bfa7-27413f4bbb88', '5ebea417-c5a4-45d4-9223-d6
+2aba478345', '9a03da54-6e88-4478-bca6-e014fe37c91b', 'c87f68ec-a64d-4b29-a325-293234370182', '6ede932d-8018-4760-8001-179f8bfd3861', '6ea63888-6648-4c6
+d-b49a-2d61fa3c0515', '65fa7d28-a6e0-442d-8678-2a1dd5e7de0f', 'd6c77415-a3c1-4627-a0ab-dacdac3db507', '694f783a-f027-4372-9ca8-bfb65e099f6f', '9451d425
+-b2a2-4e8b-99a4-d3218e9915aa', '9f60cf35-f571-4c14-9f53-f31b4e025edf', 'f10fb0f4-d6ca-4354-9d44-b8d013f71022', 'db8d70b6-a4b2-40e4-a3e8-3bf833d5aaec',
+'1ffd88db-f671-4886-8daa-b291ecad58f3', '64c2dee1-4dc2-41a0-aafd-a014d905206f', 'a59c0c21-d58f-4776-8273-b4451d233627', '42f12ac2-0c43-4fea-bf8f-edc15c
+d33d47', 'a20c1257-a1a4-40d7-b249-a66a80297f2a', 'cec409b6-ef58-40ae-820e-36326a7343a3', 'fee8a8f6-2ebb-4dff-b3f6-f2650de24139', '63cd4bed-20cf-440b-9f
+a0-a0e581ab1955', 'f5798310-38f9-420c-a461-8e04e30343fa', 'd1b48d0b-a9f3-4e5b-84e4-bda16702f729', 'c7c0fba4-db52-4802-bbc8-1506d5eaf744', '8d504ca3-6e5
+e-4de5-8b89-256f51c2efd9', '4825a573-ddc7-4bfd-8ad9-6e6080a650ad', 'bc463da9-b192-40e4-9c8b-65f451def752', 'c2d3bd23-b7e0-42f6-b717-fa225e05f140', 'a44
+28e1e-de4c-4011-abc1-9ecf1262a51d', '0ecd722f-1272-4503-ad89-e928ef80e070', '5dc286ef-d3e6-49ee-9cf9-849c805d8859', '0e572a99-0c43-49a0-8880-6318a4ebf9
+e5', '8ce7dcbd-01a6-42d4-9641-2d3e793c7000', 'd6dc76de-42b0-4c7c-8407-2da3a174bac1', 'c263bf9b-698c-4c1b-808a-b20401652996', '131e715d-39be-40db-aa76-4
+390a9925378', '45bc44f2-3e2d-4d74-8518-1440427cc3d1', '70b43f62-63cf-4ff1-a37e-3ab1f75810f3', '4ee76689-defd-4acf-b993-4f6f8272fa22', 'efcf5e95-3f3b-42
+f2-8013-13b5d5c67ff6', 'c82ca0d4-c350-4a0b-8f12-cd7d35fa4379', '3406dedc-1970-4aaf-93f5-ed4f28db7e7b', '04067ec9-1a53-47e2-80cf-467738878a2c', '61aa582
+b-1eb5-48c8-ace8-6a6e3c6dc9d3', '29f8cd8d-6125-47a2-9bb3-d7fab9220fae', '885a0dcb-836a-4411-8429-7cf4c28ba7ca', 'df37b29a-4d3a-46f0-8b60-e9027bed20d3',
+ '4b7917ff-bdcf-4d5a-a7ef-687926aafcae', 'b1af9d5a-897f-4258-9f34-fe5810c3953c', '0b7a27fe-7053-4ff5-a5fb-3115d0e69f40', 'd8b34289-30da-4620-a717-b6512
+32dfded', '0c01b08f-ee73-4f88-b4bb-5d05ef640518', '65e4ad33-fc32-4b6c-ade1-20360ee12570', '6610875e-1d4f-4d96-9bfe-c92295202f6d', 'b1e2f104-7adc-49e2-b
+eaf-2b188062af91', 'fe74b47b-b29e-4481-a40d-0ee54643190f', 'e36c1a2f-9c9c-4809-b479-c51dc44b8a07', 'dca041e5-ec60-4f5e-bd64-47b0a654290f', 'ba9a2bf6-3e
+69-4c67-b2fa-bd96018822f3', '669c0499-0b57-4336-b642-436f3e006f27', 'a5cdba2a-fd4c-4dc4-8962-6a765fdffcb2', 'eece038c-62e7-4386-abc5-70d7ad334545', 'e6
+c2f3cc-0fd4-4700-ad3d-479ea14a2d60', '39e581cf-dc74-4e80-92f9-e73e0c85064b', '127dc384-2bc3-4533-bf72-91adec86d154', '8091336a-e2a5-49b9-b646-a7cdf9ca1
+120', 'e967faeb-cf37-4be3-995e-9f027c46c09e', 'b3c9be67-90f0-4171-b8bf-415316d8c5a6', '5f08ac63-9f48-4137-9889-0846375c0d47', '974681c0-9ee1-444e-87a4-
+19e8c074e913', 'c2db4a6e-b51f-4209-8308-7be1df971bac', '573723fd-2151-44c7-83e5-e82e3a17e545', '4c5f44a5-2f36-4fb2-accc-3d3e7dfc4702', '6a4cf825-d03d-4
+efb-ae68-fd8f678f0186', 'e6306243-bd16-4da4-811a-28da7336a4b7', '7abd8f52-323e-488a-af5c-d51b3d093f89', 'f30d8c16-8a4c-4fbe-9d3a-4c26a21fedeb', '840235
+96-3c02-4fe9-b6d3-0d27e84cf025', 'c4774fcb-0ba8-4575-a165-c51a70920c78', '7103ed92-1393-4536-acbf-f7a1d6a18170', '24dc4a11-a104-4b53-bec9-0d212de47254'
+, '0abee709-771b-4359-a981-ca04dc071dba', '55548373-7eb6-47fa-a519-017fe3b961d5', '7010c069-3e0e-440e-8815-c8a1fde14f4c', 'abca561e-f91d-4038-93dd-87b2
+25f6053a', 'c00cd6a5-9c76-4714-a63a-7efc3df63004', 'e415c6b7-0eec-457f-a4d2-7b911fee4893', '11c09dab-6654-49f3-8ae1-cabb387843ff', 'fb7b5408-1080-471d-
+a7f1-12f1ff4dc0d7', 'fe4d6241-1d8d-45e9-bde7-adecb5bf469e', 'ba59aab0-f39d-46b8-be78-75047392629d', '7faee8a0-9914-4de4-a4a6-fe376cccd09f', '9f695030-1
+686-421a-ae1b-84683508d0b9', '1d6c422f-1ab5-4592-af35-9700cfff8e98', 'f50f1491-bb29-4705-974d-a9f048acc552', '2e297c6c-2897-4c45-83ca-940e78033337', 'c
+7a96edf-8e2a-4f40-aa4a-9ff0f02adb0c', '3eb70b59-7545-4c6a-adf0-15354daf0939', 'a78a8108-7da4-4cf6-bf1c-8e33a5f50e51', '7234de60-bf97-4229-a16e-537bbba0
+3df4', 'ac7ae454-26cd-4c57-9e0f-d9de12460e53', '67aff384-d825-430d-a140-d710d483b953', '5cf17da7-39ff-4676-8e79-bc5de917a049', '67d3d541-e084-40fa-b6dd
+-7b2564fc0243', '84fd6520-7cc2-4ad5-90dd-42831828c8b8', 'd2b1db7e-e845-48a7-b076-c8d077d41d24', '2afcda09-ecd9-426d-a99b-fd78bdb71a2a', '2f075541-db12-
+4c71-bd32-bb6c614202ee', 'ffe84e8f-e896-4cf1-90b0-8053f9e68a67', '2e095e60-3632-4729-8531-2cb83c7beb8a', '795f198c-c24d-4663-95ac-4c51f5100682', '48d33
+c98-19ec-47b1-814f-ce895235c741', '3f7f2e8b-2fee-4eef-8249-4b03473069ec', 'f0d68566-e78c-44d6-bb79-d394a48045c8', 'c3eb5c4f-a1f1-4ab4-8539-07a41037d8af
+', '7dd12480-d5fb-4485-9234-5be3eeca6aa5', '5139d068-2212-4adb-88e3-faa1b3b11cb7', 'fa3d35d9-7973-450c-aacc-62eb19377970', '492591a8-cdf1-4701-8600-b0d
+689f237c5', 'fec7cd48-4851-4832-8fa6-09599b8683af', '0f439b13-031e-47a3-90fc-c4dc336e82f8', '7d1a8147-c1d4-4eb3-a079-e0bca24e7200', '9dac4098-cdd1-458b
+-b540-0e85b562227a', '9317c0bb-4c11-4862-9193-2dcd3c150312', '426d75b9-46c1-43d7-95b5-2a4beb806f8a', '184d6522-0758-46a3-90f9-e658d7a83038', '315ab1dd-
+c5a1-4105-9d5a-b0b64c091dcb', '04585567-817c-41d1-a5d2-d226736b1868', '615ce70e-6372-41c9-a83f-6ed8bb8166e9', '3455d514-63f9-4a4c-90db-c0b7377e41cc', '
+be8bce51-5c9f-4e2c-9103-66c5ace23bb1', '7d655807-98ff-4bbf-91bf-7e3dee938215', '3880df7e-d1bd-4a41-a8bc-945eb4916059', '8f0670b7-38c8-44a1-a76b-b31f3c8
+b2430', '5a7eee95-9a06-4436-a85d-f30f3696266a', '13c4a708-e132-4dec-aede-9b24c7479b33', '997cca68-8307-493c-8c50-be13e17e7bf9', 'ed8ab767-71e6-4ded-8bd
+4-5f7e75edcb04', 'e3f45598-6b48-4fee-85eb-d6a23d1139ec', 'aafecb91-fa0c-4027-ad2b-7d018d6102bf', 'a3fb7117-a211-4a43-a355-369abfb1acc1', '8da03b7c-69c0
+-44b5-ad26-1ebc33b29e45', '5a6c0f5d-2c89-436b-a1be-27df6f59294e', '90de0064-732b-4985-806f-9451ef9c3e9e', 'c2e0f64c-9bd3-45dc-a308-ef0ffba9d272', 'e691
+04c7-a38c-40dd-b2b9-cfe2c74c597d', 'bc155914-c463-48d4-bc20-91eca2784d0e', '7f4e2f2e-fea6-494f-abf4-e37ebbc5b43f', 'c6f63146-09dd-41d9-b030-88e9746004d
+4', 'e267f3eb-5616-4f89-8e9f-b07a50de09c1', '79ecb0aa-2932-4399-8cc4-bbba1a874488', 'cfa1283f-051f-467a-a626-a09a85c33c42', '207fce0b-3326-44b8-b2a6-3c
+38db689d15', '013e60a1-8bd2-4376-a056-c21e39a6e653', '2c51cd90-5f03-4773-9916-f2cdbd68fafc', 'b9fbc0b8-dd62-4b4e-ba57-9ae36de68d28', '769c3c11-2ce6-429
+7-a3e1-c904ee1cc6f6', 'd3416629-3765-4eab-aaa8-3fb3453d0ce7', '03c57b93-f0e9-4373-90f0-af94b0533c6a', 'a6a547c7-3bcb-48a2-b4a0-1ac8f9fdbb53', '0f3cf123
+-eddf-46ed-a729-976883098b2f', '570abe87-d3f3-45cb-a6f3-1c0fea458601', '7b540e4e-725d-4662-a918-d30561bf908c', '4ccb1a11-4483-4ce2-bd06-732a5b6a1ae6',
+'46d01034-b4a7-475c-970c-beb3143cd462', '82713eb3-8f6c-4e0d-841a-695db0eae9ba', '35919d31-1301-4788-93f1-4825555f11ec', '5c4a9e4c-0af7-456c-be4f-f0df70
+cb50d2', '335e7f29-5f1c-429d-8ef5-ad84258c8c48', '4c6ea2c1-5671-42bf-9cbb-007a1a59839a', 'a2801ec5-1dc7-45e4-aad1-355a49691869', '46a46215-7e01-43d4-87
+c9-5865dc951d9e', 'c9ee37b6-0de7-45b9-84fe-9508cbe63586', '763519bd-230a-4790-a184-ba155b3c1d5b', 'dc2729c6-7c31-479b-a677-b9b073a7bd99', '3ebd6b8e-bd8
+1-4e17-b61e-4f9995f7f8db']
+(app.py::_get_data LineNo:156)
+
+13:43:47    autoGDC    INFO
+Reading the metadata database at /home/chaxor/.autogdc/data/archive/metadb.tsv.gz...
+(download.py::_get_full_metadb LineNo:547)
+
+13:43:47    autoGDC    INFO
+Metadatabase loaded.
+(download.py::_get_full_metadb LineNo:558)
+
+13:43:47    autoGDC    DEBUG
+The shape and head of Metadatabase:
+
+                                                                                 filename  ... organized
+id                                   nested_cases_index nested_samples_index nested_portions_index nested_analytes_index nested_aliquots_index nested_f
+ollow_ups_index nested_diagnoses_index                                                     ...
+0000047f-772f-4241-980d-1f667686fe60 0.0                0.0                  0.0                   0.0                   0.0                   0.0
+                0.0                      e6bb1330-c761-43a5-9d17-16da727232f1.FPKM.txt.gz  ...     False
+0000093b-2b25-4781-9c21-7401eeb3ef88 0.0                0.0                  0.0                   0.0                   0.0                   0.0
+                0.0                     TCGA-READ.72029f21-a40c-42f9-80ea-4c3d9d971279...  ...     False
+                                                        1.0                  0.0                   0.0                   0.0                   0.0
+                0.0                     TCGA-READ.72029f21-a40c-42f9-80ea-4c3d9d971279...  ...     False
+00000aad-5723-4805-ad8a-57f9d95b3d2f 0.0                0.0                  0.0                   0.0                   0.0                   0.0
+                0.0                     TCGA-N6-A4VD-11A-01-TSA.28534415-F409-4B2F-90F...  ...     False
+00001cab-cfa9-4fb2-90d3-5bdd2fb92d5e NaN                NaN                  NaN                   NaN                   NaN                   NaN
+                NaN                      TCGA-AR-A1AN-01A-11R-A12O-13_mirna_gdc_realn.bai  ...     False
+
+[5 rows x 28 columns]
+Shape: (30231, 28)
+(download.py::_get_full_metadb LineNo:559)
+
+13:43:47    autoGDC    DEBUG
+Total file_ids already downloaded are: []
+(app.py::_get_data LineNo:159)
+
+13:43:47    autoGDC    DEBUG
+Access is controlled for 19k files
+(download.py::new_file_ids LineNo:370)
+
+13:43:47    autoGDC    DEBUG
+Files already downloaded to temporary download dir ['autoGDC_dl.sqlite']
+(download.py::previously_downloaded_file_ids LineNo:401)
+
+13:43:47    autoGDC    INFO
+Downloading these file_ids:
+[]
+(app.py::_get_data LineNo:162)
+
+13:43:47    autoGDC    DEBUG
+Starting automatic download of study file_ids...
+(download.py::_download_ids LineNo:794)
+
+13:43:47    autoGDC    INFO
+Download starting:
+file list: []
+(This may take a while!)
+(download.py::_download_ids LineNo:807)
+
+Download (50 files/iter): 0it [00:00, ?it/s]
+13:43:47    autoGDC    DEBUG
+All files have been downloaded.
+(download.py::_download_ids LineNo:867)
+
+13:43:47    autoGDC    DEBUG
+Check for DNA methylation feature metadata...
+(download.py::_download_feature_metadata LineNo:710)
+
+13:43:47    autoGDC    DEBUG
+Saving changes to `downloaded` field in `metadb` to disk...
+(download.py::_download_data LineNo:763)
+
+13:43:48    autoGDC    DEBUG
+Saved changes to `downloaded` field in `metadb`. Took {tr} seconds.
+(download.py::_download_data LineNo:770)
+
+13:43:48    autoGDC    INFO
+Organizing downloaded files...
+(collate.py::_organize LineNo:145)
+
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 5216.80it/s]
+Cleaning up downloaded files:   0%|                                                                                              | 0/1 [00:00<?, ?it/s]
+13:43:48    autoGDC    DEBUG
+Removing all cached downloads
+(collate.py::_cleanup LineNo:304)
+
+13:43:48    autoGDC    DEBUG
+All cached downloads tagged `post_download` removed
+(collate.py::_cleanup LineNo:307)
+
+13:43:48    autoGDC    DEBUG
+All cached downloads tagged `url_download` removed
+(collate.py::_cleanup LineNo:310)
+
+13:43:48    autoGDC    DEBUG
+Removing /home/chaxor/.autogdc/data/archive/new/autoGDC_dl.sqlite
+(collate.py::_cleanup LineNo:312)
+
+Cleaning up downloaded files: 100%|█████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 618.90it/s]
+13:43:48    autoGDC    INFO
+Querying databases for dataset frames...
+(app.py::_get_data LineNo:171)
+
+  0%|                                                                                                                            | 0/9 [00:00<?, ?it/s]
+13:43:48    autoGDC    INFO
+Querying DNAm_450...
+(app.py::_get_data LineNo:173)
+
+13:43:48    autoGDC    WARNING
+HDF5 database for DNAm_450 not found, returning `None`:
+File /home/chaxor/.autogdc/data/DNAm_450.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:43:48    autoGDC    INFO
+Querying DNAm_27...
+(app.py::_get_data LineNo:173)
+
+13:43:48    autoGDC    WARNING
+HDF5 database for DNAm_27 not found, returning `None`:
+File /home/chaxor/.autogdc/data/DNAm_27.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:43:48    autoGDC    INFO
+Querying RNA_FPKM...
+(app.py::_get_data LineNo:173)
+
+13:43:48    autoGDC    WARNING
+HDF5 database for RNA_FPKM not found, returning `None`:
+File /home/chaxor/.autogdc/data/RNA_FPKM.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:43:48    autoGDC    INFO
+Querying RNA_FPKM-UQ...
+(app.py::_get_data LineNo:173)
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+
+
+In [1]: from examples import common_studies
+   ...: from autoGDC import store
+   ...: #a = store.Archive()
+   ...: #a.new_file_ids
+   ...:
+   ...: #study = common_studies.all_GBM_RNA_data()
+   ...: study = common_studies.paired_dnam_rna()
+   ...: #study.ddx()
+   ...: study
+Out[1]: <autoGDC.app.Dataset at 0x7f129a355520>
+
+In [2]: study.archive.params
+Out[2]:
+{'filters': '{"op": "and", "content": [{"op": "IN", "content": {"field": "data_type", "value": ["Gene Expression Quantification", "miRNA Expression Qua
+ntification", "Isoform Expression Quantification", "Methylation Beta Value"]}}]}',
+ 'format': 'tsv',
+ 'fields': None,
+ 'size': '1000'}
+
+In [3]: study.ddx()
+13:29:43    autoGDC    INFO
+Searching GDC for file_ids that meet criteria...
+(download.py::_get_file_ids LineNo:649)
+
+13:29:43    autoGDC    INFO
+Reading the metadata database...
+(download.py::_get_full_metadb LineNo:547)
+
+13:29:44    autoGDC    INFO
+Metadatabase loaded.
+(download.py::_get_full_metadb LineNo:558)
+
+13:29:44    autoGDC    INFO
+Downloading these file_ids:
+[]
+(app.py::_get_data LineNo:162)
+
+13:29:44    autoGDC    INFO
+Download starting:
+file list: []
+(This may take a while!)
+(download.py::_download_ids LineNo:807)
+
+Download (50 files/iter): 0it [00:00, ?it/s]
+13:29:45    autoGDC    INFO
+Organizing downloaded files...
+(collate.py::_organize LineNo:145)
+
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 2445.66it/s]
+Cleaning up downloaded files: 100%|█████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 549.86it/s]
+13:29:45    autoGDC    INFO
+Querying databases for dataset frames...
+(app.py::_get_data LineNo:171)
+
+  0%|                                                                                                                            | 0/9 [00:00<?, ?it/s]
+13:29:45    autoGDC    INFO
+Querying DNAm_450...
+(app.py::_get_data LineNo:173)
+
+13:29:45    autoGDC    WARNING
+HDF5 database for DNAm_450 not found, returning `None`:
+File /home/chaxor/.autogdc/data/DNAm_450.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:29:45    autoGDC    INFO
+Querying DNAm_27...
+(app.py::_get_data LineNo:173)
+
+13:29:45    autoGDC    WARNING
+HDF5 database for DNAm_27 not found, returning `None`:
+File /home/chaxor/.autogdc/data/DNAm_27.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:29:45    autoGDC    INFO
+Querying RNA_FPKM...
+(app.py::_get_data LineNo:173)
+
+13:29:45    autoGDC    WARNING
+HDF5 database for RNA_FPKM not found, returning `None`:
+File /home/chaxor/.autogdc/data/RNA_FPKM.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:29:45    autoGDC    INFO
+Querying RNA_FPKM-UQ...
+(app.py::_get_data LineNo:173)
+
+13:29:45    autoGDC    WARNING
+HDF5 database for RNA_FPKM-UQ not found, returning `None`:
+File /home/chaxor/.autogdc/data/RNA_FPKM-UQ.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:29:45    autoGDC    INFO
+Querying RNA_counts...
+(app.py::_get_data LineNo:173)
+
+13:29:45    autoGDC    WARNING
+HDF5 database for RNA_counts not found, returning `None`:
+File /home/chaxor/.autogdc/data/RNA_counts.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+13:29:45    autoGDC    INFO
+Querying RNA_miRNA...
+(app.py::_get_data LineNo:173)
+
+13:29:45    autoGDC    WARNING
+HDF5 database for RNA_miRNA not found, returning `None`:
+File /home/chaxor/.autogdc/data/RNA_miRNA.h5 does not exist
+(store.py::_read_dataframe LineNo:59)
+
+
+
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 
 
 /home/chaxor/home/home/release_testing/autoGDC/examples/glioblastoma_deg.py:57: DtypeWarning: Columns (33)

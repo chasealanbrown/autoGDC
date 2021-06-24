@@ -153,13 +153,13 @@ class Dataset:
     data = {}
 
     # All file ids in dataframe
-    LOG.debug(f"The file_ids for the entire dataset are: {self.archive.file_ids}")
+    LOG.debug(f"The file_ids for the entire dataset are: {pd.Series(self.archive.file_ids)}")
 
     # File ids already available locally
-    LOG.debug(f"Total file_ids already downloaded are: {self.archive.owned_file_ids}")
+    LOG.debug(f"Total file_ids already downloaded are: {pd.Series(self.archive.owned_file_ids)}")
 
     # File ids required to download
-    LOG.info(f"Downloading these file_ids:\n{self.archive.new_file_ids}")
+    LOG.info(f"Downloading these file_ids:\n{pd.Series(self.archive.new_file_ids)}")
 #    if self.archive.new_file_ids:
        # This one line does the follwing:
        #   1) Downloads all relevant data

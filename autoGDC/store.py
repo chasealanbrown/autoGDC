@@ -56,7 +56,7 @@ class Archive(Collator):
                 This may take a while...""")
       # TODO
     except FileNotFoundError as e:
-      LOG.warn("HDF5 database for {assay} not found, returning `None`:\n{e}")
+      LOG.warn(f"HDF5 database for {assay} not found, returning `None`:\n{e}")
       return None
 
 #  @property

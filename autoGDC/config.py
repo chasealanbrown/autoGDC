@@ -96,7 +96,7 @@ for k in conf:
   conf[k]["rawdata_dir"] = path.join(arxiv_dir, "raw")
   conf[k]["mygene_dir"] = path.join(arxiv_dir, "mygene")
   conf[k]["metadata_dir"] = path.join(arxiv_dir, "metadata")
-  conf[k]["metadb_path"] = path.join(arxiv_dir, "metadb.tsv.gz")
+  conf[k]["metadb_path"] = path.join(arxiv_dir, "metadb.h5")#.tsv.gz")
   conf[k]["metadb_index_path"] = path.join(arxiv_dir,
                                            "metadb_index.tsv.gz")
   # Create directories and metadata filepaths for all assay types
@@ -154,6 +154,7 @@ settings["metadata_dtypes"] = {"id":str,
                                "diabetes_treatment_type":str,
                                "downloaded":bool,
                                "organized":bool}
+
 nested_index_list = ["cases",
                      "portions",
                      "samples",

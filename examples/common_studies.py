@@ -47,7 +47,7 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
   return study
 
 
-def paired_dnam_rna(diseases=None, size = 1000):
+def paired_dnam_rna(diseases = None, size = 1000):
   if diseases is not None:
     disease_query = {"op":"IN",
                       "content":{"field": 'cases.disease_type',
