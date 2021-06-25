@@ -444,20 +444,6 @@ Is this a first time run?\nError: {e}", exc_info=True)
 
 
   @property
-  def manifest(self):
-    # TODO:  This appears to be deprecated
-    """
-    Summary:
-      The manifest table for this download.  This includes all file_ids that
-        are desired for this specific download object.
-        (This table is split up by the _download() function into chunks)
-    """
-    if self._manifest is None:
-      self._manifest = self._get_manifest()
-    return self._manifest
-
-
-  @property
   def metadb(self):
     """
     Summary:
@@ -552,7 +538,7 @@ database was just updated.""")
       LOG.info(msg)
       metadb = pd.read_hdf(self.conf["metadb_path"],
                            key="metadata",
-                           data_columns=True)
+                           data_columns=True,mode="r")
       #                     format="table")
 
 #      metadb = pd.read_csv(self.conf["metadb_path"],
@@ -712,26 +698,6 @@ Please try investigating the issue - deleting the file and recreating it now...\
       file_ids = []
     return file_ids
 
-
-  def _get_manifest(self):
-    """
-    Summary:
-      Retrieves the manifest table to store as a property for this download.
-    """
-    # Create *complete* manifest file for downloading the files
-#    boolmask = self.metadb.ids.isin(self.new_file_ids)
-    ix = self.metadb.query("id == @self.new_file_ids").index
-    manifest = self.metadb.loc[ix, ["filename",
-                                    "md5",
-                                    "size"]].copy()
-    #manifest = self.metadb.loc[self.new_file_ids][["file_name",
-    #                                                     "md5sum",
-    #                                                     "file_size"]]
-    manifest["state"] = "validated"
-    manifest.columns = ["filename", "md5", "size", "state"]
-    return manifest
-
-
   def _download_feature_metadata(self):
     """
     Summary:
@@ -766,48 +732,46 @@ Please try investigating the issue - deleting the file and recreating it now...\
     return True
 
 
-  def _download_data(self, chunk_size: int = 50):
-    """
-    Summary:
-      Download list of files using the gdc-client using manifest files.
-        This is done by iteratively making a series of manifest files
-        as chunks of a larger manifest.
-
-    Arguments:
-        chunk_size:
-          An integer to denote how many files to include in each iteration of
-            the download process.
-    """
-    # This is automatically downloading determined new_file_ids, so we set
-    #   manual to false
-
-    self._download_ids(is_manual=False)
-    self._download_feature_metadata()
-
-    if len(self.new_file_ids)>0:
-      _ix = self.metadb.query("id == @self.new_file_ids").index
-      self.metadb.loc[_ix, "downloaded"] = True
-      # TODO:
-      #   The full Metadata database should *definetly* be stored in a different
-      #   database type - Writing an *entire* CSV *every time* we make small
-      #   changes to the "downloaded" field is awful.
-      # FIXME:
-      #   This should be an HDF5 or SQLite database/file in order to make small
-      #   changes more rapidly.  This is (crazily) a bottleneck right now.
-      LOG.debug("Saving changes to `downloaded` field in `metadb` to disk...")
-      t0 = time.time()
-
-      # This only changes the single column (far more efficient)
-      with pd.HDFStore(self.conf["metadb_path"]) as store:
-        store.put("metadata", self.metadb, data_columns=["downloaded"])
-
-  #    self.metadb.to_csv(self.conf["metadb_path"],
-  #                             sep = '\t',
-  #                             compression = "gzip")
-      t1 = time.time()
-      tr = nice_num(t1-t0)
-      LOG.debug("Saved changes to `downloaded` field in `metadb`. Took {tr} seconds.")
-    return True
+#  def _download_data(self, chunk_size: int = 50):
+#    """
+#    Summary:
+#      Download list of files using the REST API
+#
+#    Arguments:
+#        chunk_size:
+#          An integer to denote how many files to include in each iteration of
+#            the download process.
+#    """
+#    # This is automatically downloading determined new_file_ids, so we set
+#    #   manual to false
+#
+#    self._download_ids(is_manual=False)
+#    self._download_feature_metadata()
+#
+#    if len(self.new_file_ids)>0:
+#      _ix = self.metadb.query("id == @self.new_file_ids").index
+#      self.metadb.loc[_ix, "downloaded"] = True
+#      # TODO:
+#      #   The full Metadata database should *definetly* be stored in a different
+#      #   database type - Writing an *entire* CSV *every time* we make small
+#      #   changes to the "downloaded" field is awful.
+#      # FIXME:
+#      #   This should be an HDF5 or SQLite database/file in order to make small
+#      #   changes more rapidly.  This is (crazily) a bottleneck right now.
+#      LOG.debug("Saving changes to `downloaded` field in `metadb` to disk...")
+#      t0 = time.time()
+#
+#      # This only changes the single column (far more efficient)
+#      with pd.HDFStore(self.conf["metadb_path"]) as store:
+#        store.put("metadata", self.metadb, data_columns=["downloaded"])
+#
+#  #    self.metadb.to_csv(self.conf["metadb_path"],
+#  #                             sep = '\t',
+#  #                             compression = "gzip")
+#      t1 = time.time()
+#      tr = nice_num(t1-t0)
+#      LOG.debug("Saved changes to `downloaded` field in `metadb`. Took {tr} seconds.")
+#    return True
 
 
   def _download_ids(self,
