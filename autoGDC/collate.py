@@ -15,7 +15,7 @@ import pandas as pd
 ## Specific function imports
 from os import path
 from tqdm import tqdm
-from io import BytesIO
+from io import BytesIO, BufferedReader
 #from joblib import Memory
 #from geode import chdir as characteristic_direction
 
@@ -69,17 +69,26 @@ class Collator(Downloader):
         # First initialize the databases (if needed), storing the
         #   associated metadata in the database first
         metadata_fp = self.conf["metadata_filepath"][assay_type]
+        if not path.isfile(metadata_fp):
+            self._download_feature_metadata()
         if not path.isfile(db_path):
-          feature_metadata = pd.read_csv(metadata_fp, sep='\t')
-          # Metadata for features should be static
-          #   so this will only be stored once
-          # The mode is "w" for 'write' here, opposed to "a" (append)
-          #   becuase the "write" is applied file-wide. (i.e. rewrites the file)
-          feature_metadata.to_hdf(db_path,
-                                  key = "feature_metadata",
-                                  mode = "w",
-                                  data_columns = True,
-                                  format = "table")
+          try:
+            feature_metadata = pd.read_csv(metadata_fp, sep='\t')
+          except UnicodeDecodeError:
+            feature_metadata = pd.read_csv(metadata_fp, sep='\t',
+                                           compression="gzip")
+          try:
+            # Metadata for features should be static
+            #   so this will only be stored once
+            # The mode is "w" for 'write' here, opposed to "a" (append)
+            #   becuase the "write" is applied file-wide. (i.e. rewrites the file)
+            feature_metadata.to_hdf(db_path,
+                                    key = "feature_metadata",
+                                    mode = "w",
+                                    data_columns = True,
+                                    format = "f")#"table")
+          except:
+            LOG.error(f"HDF to {db_path} with dataframe:\n{feature_metadata}")
 
           # This mode *can* be dangerous to use elsewhere
           #   because "a" will rewrite certain dataframes (overwrites keys)
@@ -91,6 +100,8 @@ class Collator(Downloader):
           append = True
           mode = "r+"
 
+        df.columns = [c if not "#" in c else c.replace("#", "__")
+                      for c in df.columns]
         # Samples are read one at a time and added as columns
         # Here, we need to have samples as the rows for easier indexing in HDF5
         # TODO: Make sure this is appropriate, or use better logic
@@ -99,18 +110,22 @@ class Collator(Downloader):
         # The data is indexed by file ids, similar to metadb
         sample_metadata = self.metadb.loc[df.index]
 
+#        try:
         df.to_hdf(db_path,
                   key = "data",
                   append = append,
                   mode = mode,
                   data_columns = True,
-                  format = "table")
+                  format = "f")#"table")
         sample_metadata.to_hdf(db_path,
                                key = "sample_metadata",
                                append = append,
                                mode = mode,
                                data_columns = True,
-                               format = "table")
+                               format = "f")#"table")
+#        except:
+#          LOG.error(f"HDF to {db_path} with dataframe:\n{df}")
+          
 
         # Now set the flag in the metadata such that we know
         #   which files we have organized (vs just downloaded - as these could
@@ -138,96 +153,143 @@ class Collator(Downloader):
       Dictionary of newly downloaded data.
       Provided as a dictionary of dataframes for each assay type.
     """
-
     newdata = {assaytype: None for assaytype in self.conf["filetype_regex"]}
 
     # Now move/delete each file - and get the
     LOG.info("Organizing downloaded files...")
 
-    # Each directory in the raw directory
-    newdata_path = self.conf["newdata_dir"]
-    for d in tqdm(os.listdir(newdata_path)):
-      dpath = path.join(newdata_path, d)
+    # Each downloaded file in the cache
+    for file_id in self.downloaded_file_ids():
+      try:
+#        LOG.debug(f"{file_id} in downloaded_file_ids")
+#        LOG.debug(f"Searching for {file_id} in metadb filename")
+        fname = self.metadb.loc[file_id].filename#.tolist()
+        if isinstance(fname, pd.Series):
+          fname = fname[0]
+#        LOG.debug(f"Found {fname} in in metadb")
+#        fname = fnames[0]
+#        LOG.debug(f"First fname is {fname}")
+        f = self.cache.get(file_id, read=True)
+        LOG.debug(f"Reading {fname} from cache as {type(f)}")
+        assay_type = [_assay_type for _assay_type, regex
+                                 in self.conf["filetype_regex"].items()
+                                 if regex.search(fname)][0]
+        series = self.read_series(f,
+                                  fname = fname,
+                                  assay_type = assay_type)
+        # Add series to dataframe dictionary of new data
+        if newdata[assay_type] is None:
+          newdata[assay_type] = series.to_frame()
+        else:
+          newdata[assay_type].join(series.to_frame())
 
-      # Tarred and g-zipped files hold several series to be extracted
-      if path.isfile(dpath) and dpath.endswith("tar.gz"):
-        with tarfile.open(dpath, "r:gz") as tar:
-          try:
-            for member in tar.getmembers():
-              f = tar.extractfile(member)
-              fname = path.basename(member.name)
-              fpath = path.join(dpath, member.name)
-              # TODO: Move all this to read_series()
-              #         A concern of interest is the need for assay_type to be
-              #         used as a key in newdata, as well as in read_series()
-              #         Additionally fname is used both here and in read_series()
-              if f is not None and fname != "MANIFEST.txt":
-                try:
-                  assay_type = [_assay_type for _assay_type, regex
-                                           in self.conf["filetype_regex"].items()
-                                           if regex.search(fname)][0]
-                except IndexError as e:
-                  LOG.error(f"file {fname} is not recognized as a series")
-                  continue
+      except IndexError as e:
+        LOG.error(f"file {fname} is not recognized as a series")
+        continue
 
-                except ValueError as e:
-                  LOG.warn("""The regular expression for identifiying assay type
-                           from file names appears to have failed""")
-                  LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
-                  continue
+      except KeyError as e:
+        LOG.error(f"The file_id {file_id} is not found in the metadb file_id index",
+                  exc_info=True)
 
-                LOG.debug(fname)
-
-                series = self.read_series(fpath = f.read(),
-                                          fname = fname,
-  #                                        fpath = member.name,
-                                          assay_type = assay_type)
-  #                                        file_content = f.read())
-                # Add series to dataframe dictionary of new data
-                if newdata[assay_type] is None:
-                  newdata[assay_type] = series.to_frame()
-                else:
-                  try:
-                    newdata[assay_type].join(series.to_frame())
-                  except:
-                    LOG.warn("""This series appear to be already processed
-                             within the new files that were just downloaded.
-                             Perhaps you can check this series:
-                             {series.name}\n:::\n{series}""")
-          except EOFError as e:
-            LOG.error("tarfile reading error: {e}", exc_info=True)
-
-      # Directories (non-compressed) are treated differently
-      if not path.isfile(dpath):
-        # For each of the files
-        #   (The directory should only have 1 or 2 files)
-        for fname in os.listdir(dpath):
-          fpath = path.join(dpath, fname)
-          # Just the bioassay files (not log directory files)
-          if path.isfile(fpath):
-            fname = path.basename(fpath)
-            try:
-              assay_type = [_assay_type for _assay_type, regex
-                                       in self.conf["filetype_regex"].items()
-                                       if regex.search(fname)][0]
-            except IndexError as e:
-              LOG.error(f"file {fname} is not recognized as a series")
-              continue
-
-            except ValueError as e:
-              LOG.warn("""The regular expression for identifiying assay type
-                       from file names appears to have failed""")
-              LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
-              continue
-
-            series = self.read_series(fpath, assay_type = assay_type)
-            # Add series to dataframe dictionary of new data
-            if newdata[assay_type] is None:
-              newdata[assay_type] = series.to_frame()
-            else:
-              newdata[assay_type].join(series.to_frame())
+      except ValueError as e:
+        LOG.warn("""The regular expression for identifiying assay type
+                 from file names appears to have failed""")
+        LOG.error(f"Error reading file: {file_id}\n{e}", exc_info=True)
+        continue
+      except Exception as e:
+        LOG.warn(f"Error with {file_id}\n{e}", exc_info=True)
 
     return newdata
+
+
+#    ##############
+#    # Deprecated / non-cache version
+#    ##############
+#
+#    # Each directory in the raw directory
+#    newdata_path = self.conf["newdata_dir"]
+#    for d in tqdm(os.listdir(newdata_path)):
+#      dpath = path.join(newdata_path, d)
+#
+#      # Tarred and g-zipped files hold several series to be extracted
+#      if path.isfile(dpath) and dpath.endswith("tar.gz"):
+#        with tarfile.open(dpath, "r:gz") as tar:
+#          try:
+#            for member in tar.getmembers():
+#              f = tar.extractfile(member)
+#              fname = path.basename(member.name)
+#              fpath = path.join(dpath, member.name)
+#              # TODO: Move all this to read_series()
+#              #         A concern of interest is the need for assay_type to be
+#              #         used as a key in newdata, as well as in read_series()
+#              #         Additionally fname is used both here and in read_series()
+#              if f is not None and fname != "MANIFEST.txt":
+#                try:
+#                  assay_type = [_assay_type for _assay_type, regex
+#                                           in self.conf["filetype_regex"].items()
+#                                           if regex.search(fname)][0]
+#                except IndexError as e:
+#                  LOG.error(f"file {fname} is not recognized as a series")
+#                  continue
+#
+#                except ValueError as e:
+#                  LOG.warn("""The regular expression for identifiying assay type
+#                           from file names appears to have failed""")
+#                  LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+#                  continue
+#
+#                LOG.debug(fname)
+#
+#                series = self.read_series(fpath = f.read(),
+#                                          fname = fname,
+#  #                                        fpath = member.name,
+#                                          assay_type = assay_type)
+#  #                                        file_content = f.read())
+#                # Add series to dataframe dictionary of new data
+#                if newdata[assay_type] is None:
+#                  newdata[assay_type] = series.to_frame()
+#                else:
+#                  try:
+#                    newdata[assay_type].join(series.to_frame())
+#                  except:
+#                    LOG.warn("""This series appear to be already processed
+#                             within the new files that were just downloaded.
+#                             Perhaps you can check this series:
+#                             {series.name}\n:::\n{series}""")
+#          except EOFError as e:
+#            LOG.error("tarfile reading error: {e}", exc_info=True)
+#
+#      # Directories (non-compressed) are treated differently
+#      if not path.isfile(dpath):
+#        # For each of the files
+#        #   (The directory should only have 1 or 2 files)
+#        for fname in os.listdir(dpath):
+#          fpath = path.join(dpath, fname)
+#          # Just the bioassay files (not log directory files)
+#          if path.isfile(fpath):
+#            fname = path.basename(fpath)
+#            try:
+#              assay_type = [_assay_type for _assay_type, regex
+#                                       in self.conf["filetype_regex"].items()
+#                                       if regex.search(fname)][0]
+#            except IndexError as e:
+#              LOG.error(f"file {fname} is not recognized as a series")
+#              continue
+#
+#            except ValueError as e:
+#              LOG.warn("""The regular expression for identifiying assay type
+#                       from file names appears to have failed""")
+#              LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+#              continue
+#
+#            series = self.read_series(fpath, assay_type = assay_type)
+#            # Add series to dataframe dictionary of new data
+#            if newdata[assay_type] is None:
+#              newdata[assay_type] = series.to_frame()
+#            else:
+#              newdata[assay_type].join(series.to_frame())
+#
+#    return newdata
 
 
   def read_series(self, fpath: str, assay_type: str, fname: str = None, file_content: str = None) -> pd.Series:
@@ -243,6 +305,9 @@ class Collator(Downloader):
         If the fpath is derived from a tar, then this will hold the content of
         the file
     """
+    series = None
+    if isinstance(fpath, BufferedReader):
+      fpath = BytesIO(fpath.read())
     if fname is None:
       fname = path.basename(fpath)
     # Find the assay type (in the filename)
@@ -258,22 +323,23 @@ class Collator(Downloader):
     index_name = readparams["index_name"]
 
 #    LOG.debug(f"Reading {fpath}")
-    try:
-      if file_content is not None:
-        print("YOU SHOULDNT BE HERE")
-#        fpath = StringIO(file_content)
-#        series = pd.read_csv(fpath,
-#                             compression = "gzip",
-#                             sep = "\t",
-#                             index_col = 0,
-#                             header = header,
-#                             usecols = subset_cols,
-#                             dtype = dtypes,
-#                             engine = "c").iloc[:,0]
+#    try:
+    if file_content is not None:
+      LOG.error("Using `file_content` is not yet implemented")
+#      fpath = StringIO(file_content)
+#      series = pd.read_csv(fpath,
+#                           compression = "gzip",
+#                           sep = "\t",
+#                           index_col = 0,
+#                           header = header,
+#                           usecols = subset_cols,
+#                           dtype = dtypes,
+#                           engine = "c").iloc[:,0]
 
-      else:
-        # Load data (without extra metadata) into memory
-        fpath = BytesIO(fpath)
+    else:
+      # Load data (without extra metadata) into memory
+      fpath = BytesIO(fpath)
+      try:
         series = pd.read_csv(fpath,
                              compression = "gzip",
                              sep = "\t",
@@ -282,13 +348,24 @@ class Collator(Downloader):
                              usecols = subset_cols,
                              dtype = dtypes,
                              engine = "c").iloc[:,0]
+      except UnicodeDecodeError:
+        series = pd.read_csv(fpath,
+                             sep = "\t",
+                             index_col = 0,
+                             header = header,
+                             usecols = subset_cols,
+                             dtype = dtypes,
+                             engine = "c").iloc[:,0]
+      except Exception as e:
+          LOG.error(f"Error reading file: {e}",#: {fpath}\n{e}",
+                    exc_info=True)
 
-      file_id = self.metadb[self.metadb.filename == fname].index[0]
-      series.name = file_id
-      series.index.name = index_name
+    file_id = self.metadb[self.metadb.filename == fname].index[0]
+    series.name = file_id
+    series.index.name = index_name
 
-    except Exception as e:
-      LOG.error(f"Error reading file: {fpath}\n{e}", exc_info=True)
+
+#
     return series
 
 

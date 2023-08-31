@@ -5,6 +5,9 @@ from autoGDC.store import Archive
 
 ARCHIVE = Arhive()
 
+#ARCHIVE._download_ids(file_ids=["1a8b404b-36c9-462a-9b97-c9a7f027b6b0",
+#                                "cc5435a1-2292-4915-9ba8-348140b1c90e"])
+
 # Source for checking this output:
 # https://portal.gdc.cancer.gov/files/1a8b404b-36c9-462a-9b97-c9a7f027b6b0
 EXPECTED_SMALLEST_RNA_DATA = pd.Series(

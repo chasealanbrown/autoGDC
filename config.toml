@@ -16,14 +16,22 @@
   #   MAC OS: ~/.autogdc/data
   #   Linux: ~/.autogdc/data
   data_dir = ""
+  cache_dir = ""
   # Whether or not to keep raw downloaded files in archive
   keep_raw = false
 
 # For use by lab members of Dr. Wren's lab at OMRF
 [wrenlab]
-  data_dir = "/data/autogdc/data"
+  data_dir = "/data/databases/autogdc/data"
+  cache_dir = "/data/databases/autogdc/.cache"
   keep_raw = true
 
 [wrenlab_windows]
-  data_dir = "D:\\autogdc\\data"
+  data_dir = "D:\\databases\\autogdc\\data"
+  cache_dir = "D:\\databases\\autogdc\\.cache"
   keep_raw = true
+
+[test]
+  data_dir = ""
+  cache_dir = ""
+  keep_raw = false

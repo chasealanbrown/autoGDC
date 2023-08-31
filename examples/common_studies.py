@@ -14,14 +14,14 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
   # Using metadata database on local disk
 #  study = Dataset(config_key = "default")
 #  archive = study.archive
-  archive = Archive()
-  metadb = archive.metadb
-  expr_bool = metadb.data_type == "Gene Expression Quantification"
-  disease_bool = metadb.disease_type == "Gliomas"
-  #  workflow_bool = metadb.workflow_type == workflow_type
-
-  # Should be ~900 samples
-  gbm_expr = metadb[expr_bool & disease_bool] # & workflow_bool]
+#  archive = Archive()
+#  metadb = archive.metadb
+#  expr_bool = metadb.data_type == "Gene Expression Quantification"
+#  disease_bool = metadb.disease_type == "Gliomas"
+#  #  workflow_bool = metadb.workflow_type == workflow_type
+#
+#  # Should be ~900 samples
+#  gbm_expr = metadb[expr_bool & disease_bool] # & workflow_bool]
 
   # This is the type of format that the gdc-client accepts
   #   To discover new combinations easily, try the advanced search on GDC
@@ -41,13 +41,20 @@ def all_GBM_RNA_data(workflow_type:str = "HTSeq - FPKM-UQ"):
 #  study.paired_assay = True
   study = Dataset(config_key = "default",
                   filt = filt,
-                  size = 10**6,
+                  size = 40,#10**6,
                   contrasts = ["sample_type"],
                   paired_assay = True)
   return study
 
 
-def paired_dnam_rna(diseases = None, size = 1000):
+def paired_dnam_rna(diseases = None, size = 1000,
+                    healthy = False):
+  if healthy:
+    sample_type_query = {"op":"IN",
+                          "content":
+                            {"field": 'sample_type',
+                             "value": [ "Solid Tissue Normal"] }}
+
   if diseases is not None:
     disease_query = {"op":"IN",
                       "content":{"field": 'cases.disease_type',
@@ -64,9 +71,15 @@ def paired_dnam_rna(diseases = None, size = 1000):
                           "Methylation Beta Value"] # ~12k samples
                        }}
   if disease_query:
-    comb_queries = [dnam_rna_query, disease_query]
+    if healthy:
+      comb_queries = [dnam_rna_query, disease_query, sampe_type_query]
+    else:
+      comb_queries = [dnam_rna_query, disease_query]
   else:
-    comb_queries = [dnam_rna_query]
+    if healthy:
+      comb_queries = [dnam_rna_query, sampe_type_query]
+    else:
+      comb_queries = [dnam_rna_query]
 
   filt = {"op":'and', "content": comb_queries}
 

@@ -47,6 +47,8 @@ setup(
     install_requires=[
                       "pandas>=1.2", #df.to_parquet() needs to work w/o path
                       "diskcache",
+                      "prefixed",
+                      "tables",
                       "colorama",
                       "termcolor", # for gdc-client
                       "intervaltree", # for gdc-client

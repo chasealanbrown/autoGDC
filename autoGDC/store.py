@@ -5,12 +5,14 @@ from os import path, listdir
 
 from .config import SETTINGS, LOG
 from .collate import Collator
+from .utils import Singleton
 
 # Logger for collator
 #logging.getLogger().setLevel(logging.INFO)
 #LOG = logging.getLogger(__name__)
 
 
+#@Singleton
 class Archive(Collator):
   """
   Summary:
@@ -35,6 +37,7 @@ class Archive(Collator):
 
 #    self._databases = None
 
+
   def _read_dataframe(self, assay):
     db_path = self.database_files[assay]
     query = f"file_id in {self.file_ids}"
@@ -55,9 +58,29 @@ class Archive(Collator):
       LOG.error("""Attempting to reconcile by refreshing the database.
                 This may take a while...""")
       # TODO
+      return None
     except FileNotFoundError as e:
       LOG.warn(f"HDF5 database for {assay} not found, returning `None`:\n{e}")
       return None
+
+
+  @property
+  def uuids(self):
+    """
+    Returns:
+      A dictionary containing the lists of uuids
+        indexed by filetype (directory) keys that have been downloaded
+    """
+    uuid_map = {}
+    for assay, db_path in self.database_files.items():
+      try:
+        with pd.HDFStore(db_path) as hdf:
+          uuid_map[assay] = hdf.select_column(hdfKey, 'index')
+      except:
+        LOG.debug("Error while reading the HDF5 databases", exc_info=True)
+        uuid_map[assay] = pd.Series([])
+    return uuid_map
+
 
 #  @property
 #  def files(self):

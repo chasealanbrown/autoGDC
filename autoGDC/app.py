@@ -12,7 +12,7 @@ from geode import chdir as characteristic_direction
 from .config import SETTINGS, LOG
 from .store import Archive
 #from .R import wrappers as r_wrappers
-from .df_utils import quantile_normalize, combined_region_collapsed_frame
+from .utils import quantile_normalize, combined_region_collapsed_frame
 
 
 class Dataset:
@@ -156,16 +156,18 @@ class Dataset:
     LOG.debug(f"The file_ids for the entire dataset are: {pd.Series(self.archive.file_ids)}")
 
     # File ids already available locally
-    LOG.debug(f"Total file_ids already downloaded are: {pd.Series(self.archive.owned_file_ids)}")
+    LOG.debug(f"Total file_ids already organized are: {pd.Series(self.archive.owned_file_ids)}")
 
     # File ids required to download
-    LOG.info(f"Downloading these file_ids:\n{pd.Series(self.archive.new_file_ids)}")
-#    if self.archive.new_file_ids:
-       # This one line does the follwing:
-       #   1) Downloads all relevant data
-       #   2) Organizes the new data
-       #        - Moves/deletes files
-       #        - Creates/Adds to HDF5 databases
+    print(self.archive.downloaded_file_ids())
+    if len(self.archive.new_file_ids)>0 | len(self.archive.previously_downloaded_file_ids)>0:
+      LOG.info(f"Downloading these file_ids:\n{pd.Series(self.archive.new_file_ids)}")
+      LOG.info(f"Organizing these file_ids:\n{pd.Series(self.archive.previously_downloaded_file_ids)}")
+      # This one line does the follwing:
+      #   1) Downloads all relevant data
+      #   2) Organizes the new data
+      #        - Moves/deletes files
+      #        - Creates/Adds to HDF5 databases
     self.archive._update()
 
     LOG.info("Querying databases for dataset frames...")
@@ -181,7 +183,7 @@ class Dataset:
 
     LOG.info("Constructing paired RNA and DNA methylation dataframe...")
     if self.paired_assay:
-      data["RNA_DNAm"] = self._paired_rna_dnam_dataframe()
+      data["RNA_DNAm"] = self._paired_rna_dnam_dataframe(data=data)
 
     return data
 
@@ -210,6 +212,7 @@ class Dataset:
 
 
   def _filter_loci(self,
+                   meth_frame,
                    min_seq = 5,
                    max_seq = 20,
                    collapse_level = "Gene_Symbol", # could be "Transcript_ID"
@@ -217,7 +220,7 @@ class Dataset:
                    pos_bounds = (-1500, 0)):
 
     # The 450k loci chip should have the coverage we need
-    meta = self.data["DNAm_450"].columns.to_frame()
+    meta = meth_frame.columns.to_frame()
 
     # Assume each loci is associated with the first gene in list
     # Loci with non-null genes
@@ -248,8 +251,7 @@ class Dataset:
                                    & (loci_per_gene <= max_seq)].index
     filtered_loci = meta[meta[collapse_level].isin(filtered_genes)]
 
-    filt_methdf = self.data["DNAm_450"]\
-                                .reindex(filtered_loci.index).dropna()
+    filt_methdf = meth_frame.reindex(filtered_loci.index).dropna()
 
     # change position to be bounded between 0 and 1
 #    pos = filtered_loci[position_col]
@@ -259,6 +261,7 @@ class Dataset:
 
 
   def _paired_rna_dnam_dataframe(self,
+                                 data,
                                  collapse_level = "Gene_Symbol",
                                  agg_func = list,
                                  position_col = "Position_to_TSS",
@@ -269,13 +272,16 @@ class Dataset:
       This multi-indexed dataframe combines the RNA and DNAm data
     """
 
-    filt_methdf, filtered_loci = self._filter_loci(min_seq = min_seq_len,
+    meth_frame = data["DNAm_450"]
+    filt_methdf, filtered_loci = self._filter_loci(
+                                               meth_frame,
+                                               min_seq = min_seq_len,
                                                max_seq = max_seq_len,
                                                collapse_level = collapse_level,
                                                position_col = position_col,
                                                pos_bounds = pos_bounds)
 
-    dfs_dict = self.data["RNA_counts"]
+    dfs_dict = data["RNA_counts"]
     df = combined_region_collapsed_frame(dfs_dict = dfs_dict,
                                           main_seq_data = filt_methdf,
                                           seq_feature_metadata = filtered_loci,

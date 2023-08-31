@@ -13,6 +13,7 @@ build
 dist
 MANIFEST
 autoGDC/data/*
+GDC_API.key
 autoGDC/GDC_API.key
 Enrichr/
 GSEA_Prerank

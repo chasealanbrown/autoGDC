@@ -8,10 +8,12 @@ from os import path
 from io import StringIO, BytesIO
 from typing import List
 import json
+import tarfile
 import requests
 import requests_cache
 import pandas as pd
 from tqdm import tqdm
+from datetime import datetime
 from urllib.parse import urlparse
 
 # Gene information
@@ -19,15 +21,18 @@ import mygene
 
 # Local modules
 from .config import SETTINGS, LOG
-from .df_utils import subset_paired_assay, metadata_json_to_df
+from .utils import subset_paired_assay, metadata_json_to_df
 
 import logging
 
 # Feature metadata urls for methylation
+# TODO: How to get HumanMethlation27/450 from *source*, rather than dropbox
 drpbx = "https://www.dropbox.com/s/"
+ncbi_url = "https://ftp.ncbi.nlm.nih.gov"
 _end_url = "_feature_metadata.tsv?dl=1"
 DNAm_27k_url = f"{drpbx}o36utk95fl1euy1/HumanMethylation27{_end_url}"
 DNAm_450k_url = f"{drpbx}wyck0lsa6941utw/HumanMethylation450{_end_url}"
+ncbi_gene_url = f"{ncbi_url}/gene/DATA/GENE_INFO/Mammalia/Homo_sapiens.gene_info.gz"
 
 import atexit
 import hashlib
@@ -41,10 +46,19 @@ import urllib.request
 import diskcache
 from prefixed import Float as si_num
 
+# TODO/FIXME
+# This shouldn't be done!
+# https://stackoverflow.com/questions/27835619/urllib-and-ssl-certificate-verify-failed-error
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+
 
 def nice_num(num):
   """"Simple function to represent numbers as human readable strings"""
   return f"{si_num(num):.0h}"
+
+
 
 
 #def download_url(url, filepath, params=None, verbose=True):
@@ -157,7 +171,7 @@ class Downloader(object):
 
     self.status_filepath = path.join(self.conf["data_dir"], "gdc_status")
     self.fields_filepath = path.join(self.conf["data_dir"], "gdc_fields")
-    self.dl_db_path = path.join(self.conf["newdata_dir"], "autoGDC_dl.sqlite")
+#    self.dl_db_path = path.join(self.conf["newdata_dir"], "autoGDC_dl.sqlite")
 #    if not path.isfile(self.dl_db_path):
 #      open(self.dl_db_path, 'a').close()
 #    else:
@@ -169,11 +183,14 @@ class Downloader(object):
 
     self.CACHE_EXPIRE_TIME = 60*60*24*7 # A week in seconds
     #os.path.join(os.path.dirname(__file__), "lfcache")
-    DISK_CACHE_PATH = path.join(self.conf["newdata_dir"], "autoGDC_dl.sqlite")
+    DISK_CACHE_PATH = path.join(self.conf["newdata_dir"], "diskcache")
     self.cache = diskcache.FanoutCache(DISK_CACHE_PATH,
                                   size_limit=int(500e9),
                                   cull_limit=0,
                                   timeout=self.CACHE_EXPIRE_TIME)
+#    del self.cache["https://api.gdc.cancer.gov/data__a424a64ae3fe54c2171f46f6adcfd2aa"]
+#    del self.cache["063f7b27-412b-4792-b4a1-f2383ed33fd8"]
+#    del self.cache[ncbi_gene_url]
 
     memoize = functools.partial(self.cache.memoize,
                                 tag="memoize",
@@ -242,8 +259,11 @@ class Downloader(object):
       #   infinite loop - when retrieving the master index file,
       #   this property (`local_status`) is used
       # So instead we just give None
+      #   This causes the self.outdated (which calls self.local_status) to 
+      #   return whether gdc_status == None (False)
       LOG.info(f"Local GDC database status not found.\n\
 Is this a first time run?\nError: {e}", exc_info=True)
+      self._get_metadb_index(update=True)
     return _status
 
 
@@ -348,7 +368,7 @@ Is this a first time run?\nError: {e}", exc_info=True)
       The file_ids already downloaded from GDC and available locally
     """
     if self._owned_file_ids is None:
-      self._owned_file_ids = self.metadb[self.metadb.downloaded].index.tolist()
+      self._owned_file_ids = self.metadb[self.metadb.organized].index.tolist()
     return self._owned_file_ids
 
 
@@ -366,15 +386,19 @@ Is this a first time run?\nError: {e}", exc_info=True)
       open_id_bool = self.metadb.acl.apply(lambda x: "open" in x)
       locked_ids = self.metadb[~open_id_bool].index.tolist()
       study_locked_ids = list(set(self.file_ids) # File_ids in this study
-                              - set(locked_ids))# Controlled access files
+                              .intersection(set(locked_ids)))# Controlled access files
+      study_open_ids = list(set(self.file_ids) - set(study_locked_ids))
+      LOG.debug(f"Number of Open Access file ids for the study: {len(study_open_ids)}")
 
       if len(study_locked_ids)>0:
-        if len(study_locked_ids)>10: debug_msg = f"{nice_num(len(locked_ids))} files"
-        else: debug_msg = f"these files: {locked_ids}"
+        if len(study_locked_ids)>10: debug_msg = f"{nice_num(len(study_locked_ids))} files"
+        else: debug_msg = f"these files: {study_locked_ids}"
         LOG.warn(f"Access is controlled for {debug_msg} in study.")
 
-      self._new_file_ids = list(set(study_locked_ids) # File_ids in this study
+      self._new_file_ids = list(set(study_open_ids) # File_ids in this study
                                 - set(self.owned_file_ids)) # Already downloaded
+      LOG.debug(f"Number of Owned file ids for the study: {len(self.owned_file_ids)}")
+
       # TODO: Not sure what is happening here, but it seems that somtimes
       #    there is a NaN or None in this list.  So this is another band-aid
       self._new_file_ids = [fid for fid in self._new_file_ids
@@ -387,6 +411,7 @@ Is this a first time run?\nError: {e}", exc_info=True)
       #       Are there side effects from removing these?
       #       For example, if we need to call this upstream at app/collate/etc
       self._new_file_ids = list(set(self._new_file_ids) - set(self.previously_downloaded_file_ids))
+      LOG.debug(f"Number of New file ids for the study: {len(self._new_file_ids)}")
     return self._new_file_ids
 
 
@@ -400,11 +425,22 @@ Is this a first time run?\nError: {e}", exc_info=True)
       # Deprecated for disk cache
 #      download_dir=self.conf["newdata_dir"]
 #      dled_files = os.listdir(download_dir)
-      dled_files = [key for key in self.cache
-                    if self.cache.get(key, tag=True)[1] == "post_download_data"]
+#      dled_files = [key for key in self.cache
+#                    if self.cache.get(key, tag=True)[1] == "post_download_data"]
+      dled_files = self.downloaded_file_ids()
       self._previously_downloaded_file_ids = dled_files
       LOG.debug("Files already downloaded to temporary download dir %s", dled_files)
-    return self._new_file_ids
+    return self._previously_downloaded_file_ids
+
+
+  def cache_keys(self, tag):
+    return [key for key in self.cache
+                if self.cache.get(key, tag=True)[1] == tag]
+
+  def downloaded_file_ids(self):
+    keys = self.cache_keys("post_download_data")
+    file_ids = [k for k in keys if not k.startswith("http")]
+    return file_ids
 
 
   @property
@@ -466,13 +502,22 @@ Is this a first time run?\nError: {e}", exc_info=True)
     return self._metadb_index
 
 
-  def _get_metadb_index(self) -> pd.DataFrame:
+  def _get_metadb_index(self, update: bool = False) -> pd.DataFrame:
     """
     Summary:
       A helper function to download the main index of files in GDC as a table.
     """
+    # FIXME!
+    # Yes, I know this is too confusing.
+    # The separation of if and elif is imporantant, (see: self.local_status)
+    # self.outdated can't be called if local_status throws FileNotFoundError
+    # Likely unneccessarily so, but I couldn't find the right band-aid.
+    if update:
+        pass
+    elif self.outdated:
+        update = True
 
-    if self.outdated:
+    if update:
       LOG.info("Updating the index for all GDC files...")
 
       # Table provided by GDC of filenames, UUIDs, md5sum, etc.
@@ -518,7 +563,8 @@ Is this a first time run?\nError: {e}", exc_info=True)
     #   then we need to create this full metadata database
     index_missing = not path.exists(self.conf["metadb_index_path"])
     metadb_missing = not path.exists(self.conf["metadb_path"])
-    if index_missing | metadb_missing | self.updated_index:
+    metadb_not_store = isinstance(self.conf["metadb_path"], pd.HDFStore)
+    if index_missing | metadb_missing | self.updated_index | metadb_not_store:
       LOG.info("""Metadatabase appears to be missing, or the remote GDC\
 database was just updated.""")
       metadb = self._download_full_metadb()
@@ -538,7 +584,8 @@ database was just updated.""")
       LOG.info(msg)
       metadb = pd.read_hdf(self.conf["metadb_path"],
                            key="metadata",
-                           data_columns=True,mode="r")
+                           data_columns=True,
+                           mode="r")
       #                     format="table")
 
 #      metadb = pd.read_csv(self.conf["metadb_path"],
@@ -566,8 +613,8 @@ Please try investigating the issue - deleting the file and recreating it now...\
 #Please try investigating the issue, perhaps manually deleting the file:\
 #\n{self.conf['metadb_path']}",
       # TODO: Try redownloading/reprocessing the file here?
-      metadb = self._download_full_metadb()
-#      raise
+#      metadb = self._download_full_metadb()
+      raise
 #    finally:
 
     return metadb
@@ -576,7 +623,7 @@ Please try investigating the issue - deleting the file and recreating it now...\
   def _download_full_metadb(self):
     mdbix = self.metadb_index
     all_data_fileids = mdbix[mdbix.category == "data_file"].index.tolist()
-    if (not "metdb_preprocessed" in self.cache) or self.outdated:
+    if (not "metadb_preprocessed" in self.cache) or self.outdated:
       self._download_ids(file_ids=all_data_fileids, is_metadata=True)
     _metadb = pd.read_parquet(BytesIO(self.cache.get("metadb_preprocessed")))
 #    print(_metadb.columns)
@@ -650,7 +697,8 @@ Please try investigating the issue - deleting the file and recreating it now...\
                   key="metadata",
                   mode="w",
                   data_columns=True,
-                  format="table")
+                  format="table",
+                  complevel=9)
 #    metadb.to_csv(self.conf["metadb_path"],
 #                        sep = '\t',
 #                        compression = "gzip")
@@ -698,6 +746,7 @@ Please try investigating the issue - deleting the file and recreating it now...\
       file_ids = []
     return file_ids
 
+
   def _download_feature_metadata(self):
     """
     Summary:
@@ -715,7 +764,7 @@ Please try investigating the issue - deleting the file and recreating it now...\
         elif assay == "DNAm_27":
           url = DNAm_27k_url
         elif "RNA" in assay:
-          url = False
+          url = ncbi_gene_url#False
 
           # TODO:
           #   Download information from mygene and store it
@@ -727,51 +776,51 @@ Please try investigating the issue - deleting the file and recreating it now...\
         # If it isn't there, put it there
         #   (using a local git file now - need to use git LFS or ipfs)
         if not path.exists(metadata_path) and url:
-          LOG.info("Downloading feature metadata to data directories...")
+          LOG.info(f"Downloading {assay} feature metadata to data directory {metadata_path}...")
           self._cached_download(url = url, store_fpath = metadata_path)
     return True
 
 
-#  def _download_data(self, chunk_size: int = 50):
-#    """
-#    Summary:
-#      Download list of files using the REST API
-#
-#    Arguments:
-#        chunk_size:
-#          An integer to denote how many files to include in each iteration of
-#            the download process.
-#    """
-#    # This is automatically downloading determined new_file_ids, so we set
-#    #   manual to false
-#
-#    self._download_ids(is_manual=False)
-#    self._download_feature_metadata()
-#
-#    if len(self.new_file_ids)>0:
-#      _ix = self.metadb.query("id == @self.new_file_ids").index
-#      self.metadb.loc[_ix, "downloaded"] = True
-#      # TODO:
-#      #   The full Metadata database should *definetly* be stored in a different
-#      #   database type - Writing an *entire* CSV *every time* we make small
-#      #   changes to the "downloaded" field is awful.
-#      # FIXME:
-#      #   This should be an HDF5 or SQLite database/file in order to make small
-#      #   changes more rapidly.  This is (crazily) a bottleneck right now.
-#      LOG.debug("Saving changes to `downloaded` field in `metadb` to disk...")
-#      t0 = time.time()
-#
-#      # This only changes the single column (far more efficient)
-#      with pd.HDFStore(self.conf["metadb_path"]) as store:
-#        store.put("metadata", self.metadb, data_columns=["downloaded"])
-#
-#  #    self.metadb.to_csv(self.conf["metadb_path"],
-#  #                             sep = '\t',
-#  #                             compression = "gzip")
-#      t1 = time.time()
-#      tr = nice_num(t1-t0)
-#      LOG.debug("Saved changes to `downloaded` field in `metadb`. Took {tr} seconds.")
-#    return True
+  def _download_data(self, chunk_size: int = 50):
+    """
+    Summary:
+      Download list of files using the REST API
+
+    Arguments:
+        chunk_size:
+          An integer to denote how many files to include in each iteration of
+            the download process.
+    """
+    # This is automatically downloading determined new_file_ids, so we set
+    #   manual to false
+
+    if len(self.new_file_ids)>0:
+      self._download_ids(is_manual=False)
+      self._download_feature_metadata()
+
+      _ix = self.metadb.query("id == @self.new_file_ids").index
+      self.metadb.loc[_ix, "downloaded"] = True
+      # TODO:
+      #   The full Metadata database should *definetly* be stored in a different
+      #   database type - Writing an *entire* CSV *every time* we make small
+      #   changes to the "downloaded" field is awful.
+      # FIXME:
+      #   This should be an HDF5 or SQLite database/file in order to make small
+      #   changes more rapidly.  This is (crazily) a bottleneck right now.
+      LOG.debug("Saving changes to `downloaded` field in `metadb` to disk...")
+      t0 = time.time()
+
+      # This only changes the single column (far more efficient)
+      with pd.HDFStore(self.conf["metadb_path"]) as store:
+        store.put("metadata", self.metadb, data_columns=["downloaded"])
+
+  #    self.metadb.to_csv(self.conf["metadb_path"],
+  #                             sep = '\t',
+  #                             compression = "gzip")
+      t1 = time.time()
+      tr = nice_num(t1-t0)
+      LOG.debug(f"Saved changes to `downloaded` field in `metadb`. Took {tr} seconds.")
+    return True
 
 
   def _download_ids(self,
@@ -826,9 +875,12 @@ Please reconsider using `is_manual=True`""")
 
       # Downloading Data Files (Biological Assays)
       if not is_metadata:
-        self.cache.evict("post_download_data")
+#        self.cache.evict("post_download_data")
+        filepath = os.path.join(self.conf["newdata_dir"],
+#                                "downloaded",
+                                f"{datetime.now():%Y-%m-%d-%H-%M-%S}.tar.gz")
         self._cached_download(url=f"{self.api_url}/data",
-                              store_fpath=self.conf["newdata_dir"],
+                              store_fpath=filepath,
                               post_data={"ids": chunk},
                               verbose=False)
       # Downloading Metadata
@@ -980,13 +1032,19 @@ Please reconsider using `is_manual=True`""")
       # Ensure the list is sorted such that MD5 is the same
       if "ids" in post_data:
         post_data["ids"] = sorted(post_data["ids"])
-      content_filt = post_data.get("filters").get("content")
-      if content_filt.get("field") == "files.file_id":
-        post_data["filters"]["content"]["value"] = sorted(content_filt.get("value"))
+      try:
+        content_filt = post_data.get("filters").get("content")
+        if content_filt.get("field") == "files.file_id":
+          post_data["filters"]["content"]["value"] = sorted(content_filt.get("value"))
+      except:
+        LOG.debug("POST data parameters did not have filters.content or filters.content.value")
       # Use the query data with the url as a key
       postdata_md5 = hashlib.md5(json.dumps(post_data).encode("utf-8")).hexdigest()
-      cache_key = url + postdata_md5
+      cache_key = f"{url}__{postdata_md5}"
+    cache_key_list = None
 
+    LOG.debug(f"Cache key is: {cache_key}")
+    LOG.debug(f"Tag is: {tag}")
     # Download the file if it's not already cached
     if expired or (not cache_key in self.cache):
 #      if verbose:
@@ -1014,6 +1072,7 @@ Please reconsider using `is_manual=True`""")
         # GET request handling
         sess = requests.Session()
         if tag == "url_download":
+          LOG.info(f"Getting a tag=url_download for {url}")
           with sess.get(url, stream=True, params=get_params, timeout=(20,60)) as r:
             r.raise_for_status()
             with open(target, 'wb') as f:
@@ -1066,20 +1125,41 @@ Please reconsider using `is_manual=True`""")
 
         # Add downloaded data to cache
         LOG.debug("Storing data in download cache")
+        # FIXME!!
+        # This post_download_data section doesn't make sense.
+        # We can just save the entire tar.gz file cached, and save the extraction for later?
         if tag == "post_download_data":
+          with open(target, "rb") as h:
+            self.cache.set(cache_key, h, read=True,
+                           tag=tag,
+                           expire=self.CACHE_EXPIRE_TIME)
           # Tarred and g-zipped files hold several series to be extracted
-          with tarfile.open(dpath, "r:gz") as tar:
-            try:
-              for member in tar.getmembers():
-                f = tar.extractfile(member)
-                fname = path.basename(member.name)
-                cache_key = fname
-                self.cache.set(cache_key,
-                               f, read=True,
-                               tag=tag,
-                               expire=self.CACHE_EXPIRE_TIME)
-            except:
-              LOG.error("Problem storing data in download cache")
+          # TODO: What if the file is only a tar (not gzipped)?
+          with tarfile.open(target, "r:gz") as tar:
+            cache_key_list = []
+            for member in tar.getmembers():
+              f = tar.extractfile(member)
+              fname = path.basename(member.name)
+              # TODO/FIXME!
+              #   What to do about these files?
+              if not fname in ["features.tsv.gz", "matrix.mtx.gz", "barcodes.tsv.gz", "filtered_feature_bc_matrix", "MANIFEST.txt"]:
+                try:
+                  LOG.debug(f"Extracting the file {fname} for storage in cache...")
+                  temp_cache_key = self.metadb[self.metadb.filename == fname].index[0]
+                  cache_key_list += [temp_cache_key]
+                  LOG.debug(f"The file will be stored with the key (file_id): {cache_key}.")
+                  self.cache.set(temp_cache_key,
+                                 f, read=True,
+                                 tag=tag,
+                                 expire=self.CACHE_EXPIRE_TIME)
+#                  with tempfile.NamedTemporaryFile() as tmpf:
+#                    o = self.cache.get(temp_cache_key)
+#                    tmpf.write(f)
+#                    shutil.move(f.name, store_fpath)
+                except IndexError as e:
+                  LOG.error(f"Problem storing data in download cache - fname [{fname}] is not found in metadb", exc_info=True)
+                except:
+                  LOG.error("Problem storing data in download cache", exc_info=True)
         else:
           with open(target, "rb") as h:
 #            if verbose:
@@ -1088,18 +1168,85 @@ Please reconsider using `is_manual=True`""")
                            expire=self.CACHE_EXPIRE_TIME)
 
         # Copy temp file to permanant storage
-        if store_fpath is not None:
-#          if verbose:
-          LOG.debug(f"Storing data at {store_fpath}")
-          shutil.move(target, store_fpath)
+        if (store_fpath is not None) and (cache_key_list is None):
+          LOG.debug(f"Storing a standard file of the data (redundancy) at {store_fpath}")
+          self._cache_to_file(key=cache_key, path=store_fpath)
+        elif cache_key_list is not None:
+            for k in cache_key_list:
+                LOG.info(f"Storing key {k} as {store_fpath}")
+                # Assume store_fpath is directory, with cache_key as name
+                if any(store_fpath.endswith(_i) for _i in ["tar", "gz"]):
+                  try:
+                    tmp_store_fpath = os.path.join(file_dir, k)
+                  except:
+                    LOG.error(store_fpath)
+                    return
+                else:
+                  tmp_store_fpath = os.path.join(store_fpath, k)
+                self._cache_to_file(key=k, path=tmp_store_fpath)
+
+
+          #os.rename(o, store_fpath)
+##               if verbose:
+#              #shutil.move(target, store_fpath)
+
+#            with tempfile.TemporaryDirectory() as wd:
+#              # TODO:
+#              #   It makes more sense to store a temporary file in the same directory
+#              #   as the desired location of the storage_fpath (permanant file
+#              #   location).  This way, when we call `cleanup()`, the file can simply
+#              #   be renamed, and there is far less time/chance to have an interupt
+#              #   called during the rename/move of the file, as it is nearly
+#              #   instantaneous; rather than the move/copy of the tmp file to a
+#              #   permanant one, which may exist on a different disk and need to be
+#              #   copied (i.e. slow, with large chance of interrupt problems)
+#              def cleanup():
+#                if os.path.exists(wd):
+#                  shutil.rmtree(wd)
+#              atexit.register(cleanup)
+#              target = os.path.join(wd, "tmp_download.bin")
+
 
     # Get the data from cache here
     o = self.cache.get(cache_key, read=True)
+    
+    # If there's still a store_path, store the cached output now
+    # TODO/FIXME!!!
+    #   This ends up re-storing and moving the files.
+    #   The moving and storing above should be refactored
+    #self._cache_to_file(key=cache_key, path=store_fpath)
+    # Copy temp file to permanant storage
+#    if (store_fpath is not None) and (cache_key_list is None):
+#      LOG.debug(f"Storing a standard file of the data (redundancy) at {store_fpath}")
+#      try:
+#        self._cache_to_file(key=cache_key, path=store_fpath)
+#      except:
+#          LOG.debug(f"Error moving cache to file: {cache_key} to {store_fpath}")
+#    elif cache_key_list is not None:
+#        self._cache_to_file(key=cache_key, path=store_fpath)
+#        for k in cache_key_list:
+#            LOG.debug(f"Storing key {k} as {store_path}")
+#            # Assume store_fpath is directory, with cache_key as name
+#            tmp_store_fpath = os.path.join(os.path.dirname(store_fpath), k)
+#            self._cache_to_file(key=k, path=tmp_store_fpath)
 
     # Deal with compression
     if url.endswith(".gz"):
       return gzip.GzipFile(fileobj=o, mode="rb")
     return o
+
+
+  def _cache_to_file(self, key: str, path: str):
+    with tempfile.NamedTemporaryFile(delete=False) as tmpf:
+      o = self.cache.get(key, read=True)
+      tmpf.write(o.read())
+      tmpf.flush()
+    shutil.move(tmpf.name, path)
+    # os.rename doesn't work across devices (nfs)
+#    os.rename(tmpf.name, path)
+#    os.remove(tmpf.name)
+    return True
+
 
 def flatten_gdc_json_list(json_list):
   result = json_list[0]

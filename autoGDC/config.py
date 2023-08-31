@@ -1,56 +1,14 @@
 import re
-import logging
+import os
 import toml
 from os import path
-#from sys import stdout
 from numpy import float64
-from colorama import init as colorama_init
-from colorama import Fore, Back, Style
+import diskcache
+from wrenches.general import calling_module_name, pkg_logger, pkg_default_cache_directory
 
-colorama_init()
+PKGNAME = calling_module_name()
+LOG = pkg_logger(name=PKGNAME)#(name=None, level=logging.INFO, console_level=logging.DEBUG):
 
-class CustomFormatter(logging.Formatter):
-  """
-  Logging Formatter to add colors and count warning / errors
-  Source: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
-  """
-
-  FORMAT_STYLES = {
-      logging.DEBUG: Fore.WHITE + Style.DIM,
-      logging.INFO: Style.NORMAL,
-      logging.WARNING: Fore.YELLOW,
-      logging.ERROR: Fore.RED,
-      logging.CRITICAL: Fore.RED + Style.BRIGHT,
-  }
-
-  def format(self, record):
-    underline = "\033[4m"
-    italic = "\033[3m"
-    log_head_str = (underline +
-                   "%(asctime)s    %(name)s    %(levelname)s" +
-                   Style.RESET_ALL)
-    log_mid_str = "\n%(message)s\n"
-    log_end_str = (italic + Style.DIM +
-                   "(%(filename)s::%(funcName)s LineNo:%(lineno)d)\n" +
-                   Style.RESET_ALL)
-    style = self.FORMAT_STYLES.get(record.levelno)
-    log_fmt = (style + log_head_str + Style.RESET_ALL +
-               style + log_mid_str + Style.RESET_ALL +
-               style + log_end_str + Style.RESET_ALL)
-    formatter = logging.Formatter(log_fmt, "%H:%M:%S")#"%Y-%m-%d %H:%M:%S")
-    return formatter.format(record)
-
-
-# Logger for package
-#logging.basicConfig() # will print twice with this
-LOG = logging.getLogger("autoGDC")
-LOG.setLevel(logging.DEBUG)
-
-# Create console handler with a higher log level
-ch = logging.StreamHandler()#stdout)
-ch.setLevel(logging.DEBUG)
-ch.setFormatter(CustomFormatter())
-LOG.addHandler(ch)
 
 ###############################################################################
 # Load the config and settings files (static/no-logic part of config)
@@ -61,9 +19,25 @@ this_path = path.dirname(path.abspath(__file__))
 # Load the local system settings for data paths
 with open(path.join(this_path, "..", "config.toml")) as f:
   conf = toml.loads(f.read())
-  # Check if the local data directory needs to be set to the default
-  if conf["default"]["data_dir"] == "":
-    conf["default"]["data_dir"] = path.expanduser(path.join("~", ".autogdc", "data"))
+  # Default and test directories have a default if empty string is given
+  for conf_type in ["default", "test"]:
+    # Check if the local data directory needs to be set to the default
+    if conf[conf_type]["data_dir"] == "":
+      data_dir = path.expanduser(path.join("~", f".{PKGNAME}", "data"))
+      conf[conf_type]["data_dir"] = data_dir
+
+    if not os.path.exists(conf[conf_type]["data_dir"]):
+      os.makedirs(conf[conf_type]["data_dir"])
+
+    # Check if the local cache directory needs to be set to the default
+    if conf[conf_type]["cache_dir"] == "":
+  #    cache_path = ["~", ".cache", PKGNAME]
+  #    cache_path = path.expanduser(path.join(*cache_path))
+      conf[conf_type]["cache_dir"] = pkg_default_cache_directory(name=PKGNAME)
+    if not os.path.exists(conf[conf_type]["cache_dir"]):
+        os.makedirs(conf[conf_type]["cache_dir"])
+
+CACHE = diskcache.Cache(dir=conf["default"]["cache_dir"])
 
 # Load the GDC API key for access to controlled data
 with open(path.join(this_path, "..", "GDC_API.key")) as f:
